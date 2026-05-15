@@ -5,12 +5,14 @@ High-performance web scraping API built with Flask and Playwright.
 ## Installation
 
 1. Create virtual environment:
+
 ```bash
 python -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
 ```
 
-2. Install dependencies:
+1. Install dependencies:
+
 ```bash
 pip install -r requirements.txt
 playwright install chromium
@@ -20,11 +22,13 @@ cp .env.example .env
 ## Running the Server
 
 Development:
+
 ```bash
 python app.py
 ```
 
 Production:
+
 ```bash
 gunicorn -w 4 -b 0.0.0.0:5000 app:app
 ```
@@ -32,11 +36,13 @@ gunicorn -w 4 -b 0.0.0.0:5000 app:app
 ## API Endpoints
 
 ### Health Check
+
 ```
 GET /api/health
 ```
 
 ### Scrape Multiple URLs
+
 ```
 POST /api/scrape
 
@@ -63,6 +69,7 @@ Response:
 ```
 
 ### Scrape Single URL
+
 ```
 POST /api/scrape/single
 
@@ -94,6 +101,7 @@ Response:
 ## Configuration
 
 Create `.env` file:
+
 ```
 FLASK_ENV=development
 FLASK_DEBUG=True

@@ -64,12 +64,14 @@ Access API at: `http://localhost:5000`
 ## Technology Stack
 
 ### Frontend
+
 - **Astro** - Static site generator
 - **Tailwind CSS** - Utility-first CSS
 - **Vanilla JavaScript** - No frameworks
 - **Material Design 3 Colors** - Premium UI design
 
 ### Backend
+
 - **Flask** - Python web framework
 - **Playwright** - Browser automation
 - **BeautifulSoup4** - HTML parsing
@@ -90,6 +92,7 @@ Access API at: `http://localhost:5000`
 ## Deployment
 
 ### Frontend (Vercel)
+
 ```bash
 cd cardosox
 npm run build
@@ -97,6 +100,7 @@ npm run build
 ```
 
 ### Backend (Render/Railway/VPS)
+
 ```bash
 cd backend
 # Install dependencies on server
@@ -110,6 +114,7 @@ gunicorn -w 4 -b 0.0.0.0:5000 app:app
 ## Environment Variables
 
 ### Backend (.env)
+
 ```
 FLASK_ENV=production
 API_PORT=5000
@@ -118,6 +123,7 @@ MAX_RETRIES=3
 ```
 
 ### Frontend (.env)
+
 ```
 PUBLIC_API_URL=https://your-backend-api.com
 ```
@@ -127,12 +133,14 @@ The frontend uses `PUBLIC_API_URL` as the API base URL and appends `/api/scrape`
 ## Validation
 
 ### Frontend
+
 ```bash
 cd cardosox
 npm run build
 ```
 
 ### Backend
+
 ```bash
 cd backend
 python -m py_compile app.py scraper.py utils.py
