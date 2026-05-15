@@ -1,7 +1,6 @@
 # Build
 dist/
 .astro/
-src/env.d.ts
 
 # Dependencies
 node_modules/
