@@ -1,0 +1,19 @@
+{
+  "name": "cardosox-scraper",
+  "version": "1.0.0",
+  "description": "CardosoX Scraper - Premium Web Scraping SaaS Platform",
+  "type": "module",
+  "scripts": {
+    "dev": "astro dev",
+    "start": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "astro": "astro"
+  },
+  "dependencies": {
+    "astro": "^4.4.0"
+  },
+  "devDependencies": {
+    "tailwindcss": "^3.4.0"
+  }
+}

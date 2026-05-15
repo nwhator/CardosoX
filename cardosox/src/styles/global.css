@@ -1,0 +1,161 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Geist:wght@400;600;700;900&family=JetBrains+Mono:wght@400&family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap');
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html {
+  color-scheme: dark;
+}
+
+body {
+  background: linear-gradient(135deg, #131313 0%, #1a1a2e 50%, #131313 100%);
+  color: #e5e2e1;
+  font-family: 'Geist', sans-serif;
+  min-height: 100vh;
+}
+
+/* Glass morphism effect */
+.glass {
+  background: rgba(19, 19, 19, 0.7);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(203, 195, 215, 0.1);
+  border-radius: 12px;
+}
+
+.glass-sm {
+  background: rgba(19, 19, 19, 0.5);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(203, 195, 215, 0.08);
+}
+
+/* Gradient text */
+.gradient-text {
+  background: linear-gradient(135deg, #d0bcff 0%, #a078ff 50%, #ffb869 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Smooth transitions */
+.transition-smooth {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Hover effects */
+.hover-lift {
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.hover-lift:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.4);
+}
+
+/* Button styles */
+.btn-primary {
+  @apply px-6 py-3 rounded-lg font-semibold;
+  background: linear-gradient(135deg, #d0bcff 0%, #a078ff 100%);
+  color: #3c0091;
+  transition: all 0.3s ease;
+}
+
+.btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 16px rgba(160, 120, 255, 0.4);
+}
+
+.btn-secondary {
+  @apply px-6 py-3 rounded-lg font-semibold;
+  background: rgba(173, 198, 255, 0.1);
+  color: #adc6ff;
+  border: 1px solid #adc6ff;
+  transition: all 0.3s ease;
+}
+
+.btn-secondary:hover {
+  background: rgba(173, 198, 255, 0.2);
+  transform: translateY(-2px);
+}
+
+/* Loading animation */
+@keyframes shimmer {
+  0%, 100% {
+    background-position: -1000px 0;
+  }
+  50% {
+    background-position: 1000px 0;
+  }
+}
+
+.animate-shimmer {
+  animation: shimmer 2s infinite;
+  background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.1) 50%, transparent 100%);
+  background-size: 1000px 100%;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0e0e0e;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #494454;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #595059;
+}
+
+/* Text selection */
+::selection {
+  background: #a078ff;
+  color: #131313;
+}
+
+/* Focus states */
+:focus-visible {
+  outline: 2px solid #d0bcff;
+  outline-offset: 2px;
+}
+
+/* Animation utilities */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.animate-fade-in-up {
+  animation: fadeInUp 0.6s ease-out;
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.5s ease-out;
+}

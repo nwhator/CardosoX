@@ -1,0 +1,358 @@
+---
+---
+
+<div class="mt-24 min-h-screen pt-12 pb-12">
+  <div class="max-w-4xl mx-auto px-6">
+    <!-- Header -->
+    <div class="mb-12">
+      <h2 class="text-4xl font-bold mb-4 gradient-text">Web Scraper</h2>
+      <p class="text-on-surface-variant text-lg">Enter URLs to scrape data in bulk. Our advanced scraper extracts company information, emails, phone numbers, and addresses.</p>
+    </div>
+
+    <!-- Form Card -->
+    <div class="glass glass-padding p-8 rounded-2xl hover-lift">
+      <div class="mb-8">
+        <label class="block text-on-surface font-semibold mb-3">URLs to Scrape</label>
+        <p class="text-on-surface-variant text-sm mb-4">Enter one URL per line. Maximum 10 URLs per request.</p>
+        
+        <textarea 
+          id="urlsInput"
+          class="w-full h-48 bg-surface-container-low border border-outline-variant rounded-lg p-4 text-on-surface placeholder-on-surface-variant focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 resize-none font-code-sm"
+          placeholder="https://example.com&#10;https://another-site.com&#10;https://third-site.com"
+        ></textarea>
+      </div>
+
+      <div id="urlsList" class="mb-8 space-y-2 hidden">
+        <p class="text-sm font-semibold text-on-surface">URLs to scrape:</p>
+        <div id="urlsDisplay" class="space-y-2"></div>
+      </div>
+
+      <button 
+        id="addMoreBtn"
+        class="btn-secondary text-sm mb-6 w-full sm:w-auto"
+      >
+        + Add More Links
+      </button>
+
+      <button 
+        id="startScrapingBtn"
+        class="btn-primary w-full py-4 font-semibold text-lg"
+      >
+        <span id="btnText">Start Scraping</span>
+        <span id="loadingSpinner" class="inline-block ml-2 hidden">
+          <svg class="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>
+        </span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Results Section -->
+<div id="resultsSection" class="hidden">
+  <div class="max-w-7xl mx-auto px-6 mt-12 mb-12">
+    <div class="flex items-center justify-between mb-8">
+      <h3 class="text-3xl font-bold gradient-text">Scraping Results</h3>
+      <div class="flex gap-4">
+        <button id="downloadCSVBtn" class="btn-secondary text-sm">
+          📥 CSV
+        </button>
+        <button id="downloadJSONBtn" class="btn-secondary text-sm">
+          📥 JSON
+        </button>
+      </div>
+    </div>
+
+    <!-- Results Table -->
+    <div class="glass rounded-2xl overflow-hidden">
+      <div class="overflow-x-auto">
+        <table class="w-full">
+          <thead class="border-b border-outline-variant">
+            <tr class="bg-surface-container">
+              <th class="px-6 py-4 text-left text-sm font-semibold text-on-surface">URL</th>
+              <th class="px-6 py-4 text-left text-sm font-semibold text-on-surface">Company</th>
+              <th class="px-6 py-4 text-left text-sm font-semibold text-on-surface">Emails</th>
+              <th class="px-6 py-4 text-left text-sm font-semibold text-on-surface">Phones</th>
+              <th class="px-6 py-4 text-left text-sm font-semibold text-on-surface">Address</th>
+              <th class="px-6 py-4 text-left text-sm font-semibold text-on-surface">Status</th>
+            </tr>
+          </thead>
+          <tbody id="resultsTableBody" class="divide-y divide-outline-variant">
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Empty State -->
+    <div id="emptyState" class="text-center py-12">
+      <p class="text-on-surface-variant">No results yet. Start scraping to see data here.</p>
+    </div>
+  </div>
+</div>
+
+<!-- Notifications -->
+<div id="notificationsContainer" class="fixed bottom-6 right-6 space-y-4 max-w-sm"></div>
+
+<script>
+  const API_URL = 'http://localhost:5000/api/scrape';
+
+  interface ScrapeResult {
+    url: string;
+    company_name: string;
+    emails: string[];
+    phone_numbers: string[];
+    addresses: string[];
+    status: string;
+  }
+
+  let scrapeResults: ScrapeResult[] = [];
+
+  // DOM Elements
+  const urlsInput = document.getElementById('urlsInput') as HTMLTextAreaElement;
+  const addMoreBtn = document.getElementById('addMoreBtn') as HTMLButtonElement;
+  const startScrapingBtn = document.getElementById('startScrapingBtn') as HTMLButtonElement;
+  const resultsSection = document.getElementById('resultsSection') as HTMLElement;
+  const resultsTableBody = document.getElementById('resultsTableBody') as HTMLElement;
+  const emptyState = document.getElementById('emptyState') as HTMLElement;
+  const downloadCSVBtn = document.getElementById('downloadCSVBtn') as HTMLButtonElement;
+  const downloadJSONBtn = document.getElementById('downloadJSONBtn') as HTMLButtonElement;
+  const notificationsContainer = document.getElementById('notificationsContainer') as HTMLElement;
+
+  // Add More Links
+  addMoreBtn.addEventListener('click', () => {
+    const urls = urlsInput.value.trim().split('\n').filter(url => url.trim());
+    if (urls.length >= 10) {
+      showNotification('Maximum 10 URLs allowed', 'error');
+      return;
+    }
+    urlsInput.value += '\n';
+    urlsInput.focus();
+    urlsInput.style.height = 'auto';
+    urlsInput.style.height = urlsInput.scrollHeight + 'px';
+  });
+
+  // Auto-expand textarea
+  urlsInput.addEventListener('input', () => {
+    urlsInput.style.height = 'auto';
+    urlsInput.style.height = urlsInput.scrollHeight + 'px';
+  });
+
+  // Start Scraping
+  startScrapingBtn.addEventListener('click', async () => {
+    const urls = urlsInput.value
+      .split('\n')
+      .map(url => url.trim())
+      .filter(url => url && isValidUrl(url));
+
+    if (urls.length === 0) {
+      showNotification('Please enter valid URLs', 'error');
+      return;
+    }
+
+    if (urls.length > 10) {
+      showNotification('Maximum 10 URLs allowed', 'error');
+      return;
+    }
+
+    startScrapingBtn.disabled = true;
+    startScrapingBtn.style.opacity = '0.6';
+    document.getElementById('btnText')!.textContent = 'Scraping...';
+    document.getElementById('loadingSpinner')!.classList.remove('hidden');
+
+    try {
+      const response = await fetch(API_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ urls })
+      });
+
+      const data = await response.json();
+      
+      if (response.ok) {
+        scrapeResults = data.results || [];
+        updateResultsTable();
+        resultsSection.classList.remove('hidden');
+        showNotification('Scraping completed!', 'success');
+        
+        // Scroll to results
+        setTimeout(() => {
+          resultsSection.scrollIntoView({ behavior: 'smooth' });
+        }, 300);
+      } else {
+        showNotification(data.message || 'Scraping failed', 'error');
+      }
+    } catch (error) {
+      console.error('Scraping error:', error);
+      showNotification('Failed to connect to scraper. Make sure the backend is running on localhost:5000', 'error');
+    } finally {
+      startScrapingBtn.disabled = false;
+      startScrapingBtn.style.opacity = '1';
+      document.getElementById('btnText')!.textContent = 'Start Scraping';
+      document.getElementById('loadingSpinner')!.classList.add('hidden');
+    }
+  });
+
+  // Download CSV
+  downloadCSVBtn.addEventListener('click', () => {
+    if (scrapeResults.length === 0) {
+      showNotification('No results to download', 'error');
+      return;
+    }
+
+    const headers = ['URL', 'Company Name', 'Emails', 'Phone Numbers', 'Addresses', 'Status'];
+    const rows = scrapeResults.map(result => [
+      result.url,
+      result.company_name || 'N/A',
+      (result.emails || []).join('; ') || 'N/A',
+      (result.phone_numbers || []).join('; ') || 'N/A',
+      (result.addresses || []).join('; ') || 'N/A',
+      result.status || 'N/A'
+    ]);
+
+    const csv = [headers, ...rows].map(row => 
+      row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')
+    ).join('\n');
+
+    downloadFile(csv, 'scraping-results.csv', 'text/csv');
+  });
+
+  // Download JSON
+  downloadJSONBtn.addEventListener('click', () => {
+    if (scrapeResults.length === 0) {
+      showNotification('No results to download', 'error');
+      return;
+    }
+
+    const json = JSON.stringify(scrapeResults, null, 2);
+    downloadFile(json, 'scraping-results.json', 'application/json');
+  });
+
+  // Helper Functions
+  function isValidUrl(url: string): boolean {
+    try {
+      new URL(url);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  function updateResultsTable(): void {
+    resultsTableBody.innerHTML = '';
+    
+    if (scrapeResults.length === 0) {
+      emptyState.classList.remove('hidden');
+      return;
+    }
+
+    emptyState.classList.add('hidden');
+
+    scrapeResults.forEach((result, index) => {
+      const row = document.createElement('tr');
+      row.className = 'border-b border-outline-variant hover:bg-surface-container-low transition-colors';
+      row.style.animation = `fadeInUp 0.5s ease-out ${index * 0.05}s both`;
+      
+      row.innerHTML = `
+        <td class="px-6 py-4 text-sm text-on-surface-variant truncate max-w-xs">
+          <a href="${result.url}" target="_blank" class="hover:text-primary transition-colors">
+            ${result.url}
+          </a>
+        </td>
+        <td class="px-6 py-4 text-sm text-on-surface">${result.company_name || '-'}</td>
+        <td class="px-6 py-4 text-sm">
+          <div class="flex flex-wrap gap-2">
+            ${result.emails && result.emails.length > 0 
+              ? result.emails.map(email => `
+                <span class="px-2 py-1 rounded bg-surface-container-low text-on-surface text-xs font-code-sm">
+                  ${email}
+                </span>
+              `).join('')
+              : '<span class="text-on-surface-variant">-</span>'
+            }
+          </div>
+        </td>
+        <td class="px-6 py-4 text-sm">
+          <div class="flex flex-wrap gap-2">
+            ${result.phone_numbers && result.phone_numbers.length > 0
+              ? result.phone_numbers.map(phone => `
+                <span class="px-2 py-1 rounded bg-surface-container-low text-on-surface text-xs font-code-sm">
+                  ${phone}
+                </span>
+              `).join('')
+              : '<span class="text-on-surface-variant">-</span>'
+            }
+          </div>
+        </td>
+        <td class="px-6 py-4 text-sm text-on-surface-variant">${result.addresses && result.addresses.length > 0 ? result.addresses.join(', ') : '-'}</td>
+        <td class="px-6 py-4 text-sm">
+          <span class="inline-block px-3 py-1 rounded-full text-xs font-semibold ${
+            result.status === 'success' 
+              ? 'bg-green-500/20 text-green-300' 
+              : result.status === 'error'
+              ? 'bg-red-500/20 text-red-300'
+              : 'bg-yellow-500/20 text-yellow-300'
+          }">
+            ${result.status || 'pending'}
+          </span>
+        </td>
+      `;
+      
+      resultsTableBody.appendChild(row);
+    });
+  }
+
+  function showNotification(message: string, type: 'success' | 'error' | 'info' = 'info'): void {
+    const notification = document.createElement('div');
+    notification.className = `glass rounded-lg p-4 animate-fade-in-up ${
+      type === 'success' ? 'border-l-4 border-green-500' :
+      type === 'error' ? 'border-l-4 border-error' :
+      'border-l-4 border-secondary'
+    }`;
+    
+    notification.innerHTML = `
+      <div class="flex items-center gap-3">
+        <span class="text-lg">
+          ${type === 'success' ? '✓' : type === 'error' ? '✕' : 'ℹ'}
+        </span>
+        <span class="text-on-surface">${message}</span>
+      </div>
+    `;
+    
+    notificationsContainer.appendChild(notification);
+    
+    setTimeout(() => {
+      notification.style.animation = 'fadeOut 0.5s ease-out forwards';
+      setTimeout(() => notification.remove(), 500);
+    }, 4000);
+  }
+
+  function downloadFile(content: string, filename: string, type: string): void {
+    const blob = new Blob([content], { type });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showNotification(`Downloaded ${filename}`, 'success');
+  }
+</script>
+
+<style is:global>
+  @keyframes fadeOut {
+    from {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    to {
+      opacity: 0;
+      transform: translateY(-10px);
+    }
+  }
+</style>
