@@ -7,7 +7,7 @@ import os
 from datetime import datetime
 
 from dotenv import load_dotenv
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, Response
 from flask_cors import CORS
 import logging
 from scraper import WebScraper
@@ -169,6 +169,41 @@ def scrape_single_url():
         return jsonify({
             'status': 'error',
             'message': f'Scraping failed: {str(e)}'
+        }), 500
+
+
+@app.route('/api/scrape/csv', methods=['POST'])
+def scrape_urls_csv():
+    """Scrape URLs and return flattened CSV export."""
+    try:
+        data = request.get_json(silent=True)
+
+        if not data or 'urls' not in data:
+            return jsonify({
+                'status': 'error',
+                'message': 'Missing "urls" in request body'
+            }), 400
+
+        validation_result = validate_urls(data.get('urls', []))
+        if not validation_result['valid']:
+            return jsonify({
+                'status': 'error',
+                'message': validation_result['message']
+            }), 400
+
+        results = scraper.scrape_multiple_urls(validation_result.get('valid_urls', []))
+        csv_text = scraper.export_csv(results)
+        return Response(
+            csv_text,
+            mimetype='text/csv',
+            headers={'Content-Disposition': 'attachment; filename=cardosox_scrape.csv'}
+        )
+
+    except Exception as e:
+        logger.error(f"CSV scraping error: {str(e)}", exc_info=True)
+        return jsonify({
+            'status': 'error',
+            'message': f'CSV export failed: {str(e)}'
         }), 500
 
 

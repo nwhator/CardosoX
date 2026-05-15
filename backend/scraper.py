@@ -1,375 +1,235 @@
-"""
-Web Scraper Module
-Handles website scraping with anti-bot detection bypass
-"""
+"""Production entity-aware crawler facade used by the Flask API."""
+
+from __future__ import annotations
 
 import asyncio
 import logging
-from typing import List, Dict, Any, Optional
-from urllib.parse import urljoin, urlparse
-import re
 import os
-import random
+from pathlib import Path
+from typing import Any
 
-from playwright.async_api import async_playwright, Browser, Page
-from bs4 import BeautifulSoup
-from fake_useragent import UserAgent
-import cloudscraper
+import requests
+
+from crawler.deep_crawler import DeepCrawler
+from crawler.discovery_crawler import DiscoveryCrawler
+from crawler.queue_manager import QueueManager
+from exporters.csv_exporter import CsvExporter
+from exporters.json_exporter import JsonExporter
+from matchers.entity_matcher import EntityMatcher
+from utils.cleaners import unique_keep_order
 
 logger = logging.getLogger(__name__)
 
+try:
+    import cloudscraper
+except Exception:  # pragma: no cover - optional production dependency
+    cloudscraper = None
+
 
 class WebScraper:
-    """Advanced web scraper with anti-bot detection bypass"""
-    
+    """Entity-aware intelligence crawler with quote extraction.
+
+    Public methods intentionally preserve the previous synchronous API used by
+    app.py while the implementation runs an async Playwright worker pipeline.
+    """
+
     def __init__(self):
-        self.ua = UserAgent()
-        self.cs = cloudscraper.create_scraper()
-        self.max_retries = int(os.getenv('MAX_RETRIES', '3'))
-        self.timeout = int(os.getenv('SCRAPER_TIMEOUT', '30'))
-        
-    def scrape_multiple_urls(self, urls: List[str]) -> List[Dict[str, Any]]:
-        """Scrape multiple URLs concurrently"""
+        self.max_retries = int(os.getenv("MAX_RETRIES", "3"))
+        self.timeout = int(os.getenv("SCRAPER_TIMEOUT", "30"))
+        self.concurrency = int(os.getenv("SCRAPER_WORKERS", "3"))
+        self.max_discovery_links = int(os.getenv("MAX_DISCOVERY_LINKS", "20"))
+        self.default_region = os.getenv("PHONE_DEFAULT_REGION", "NG")
+        self.partial_save_dir = os.getenv("PARTIAL_SAVE_DIR", "").strip()
+
+        self.cs = cloudscraper.create_scraper() if cloudscraper else requests.Session()
+        self.discovery = DiscoveryCrawler(
+            timeout_ms=self.timeout * 1000,
+            max_links_per_seed=self.max_discovery_links,
+        )
+        self.deep = DeepCrawler(
+            timeout_ms=self.timeout * 1000,
+            retries=self.max_retries,
+            default_region=self.default_region,
+        )
+        self.entity_matcher = EntityMatcher()
+        self.csv_exporter = CsvExporter()
+        self.json_exporter = JsonExporter()
+
+    def scrape_multiple_urls(self, urls: list[str]) -> list[dict[str, Any]]:
         try:
-            # Run async scraping
-            results = asyncio.run(self._scrape_multiple_async(urls))
-            return results
-        except Exception as e:
-            logger.error(f"Error in concurrent scraping: {str(e)}")
-            # Fallback to sequential scraping
-            return [self.scrape_url(url) for url in urls]
-    
-    async def _scrape_multiple_async(self, urls: List[str]) -> List[Dict[str, Any]]:
-        """Async concurrent scraping"""
-        async with async_playwright() as p:
-            browser = await p.chromium.launch(
-                headless=True,
-                args=['--disable-blink-features=AutomationControlled']
-            )
-            
-            tasks = [
-                self._scrape_url_with_browser(browser, url)
-                for url in urls
-            ]
-            
-            results = await asyncio.gather(*tasks, return_exceptions=True)
-            await browser.close()
-            
-            # Handle exceptions in results
-            processed_results = []
-            for url, result in zip(urls, results):
-                if isinstance(result, Exception):
-                    logger.error(f"Error in async scraping: {str(result)}")
-                    processed_results.append({
-                        'url': url,
-                        'company_name': None,
-                        'emails': [],
-                        'phone_numbers': [],
-                        'addresses': [],
-                        'status': 'error'
-                    })
-                else:
-                    processed_results.append(result)
-            
-            return processed_results
-    
-    async def _scrape_url_with_browser(self, browser: Browser, url: str) -> Dict[str, Any]:
-        """Scrape a single URL using Playwright"""
-        context = None
-        page = None
-        
-        try:
-            # Create context with anti-detection features
-            context = await browser.new_context(
-                user_agent=self.ua.random,
-                viewport={'width': random.randint(1200, 1920), 'height': random.randint(800, 1080)},
-                extra_http_headers={
-                    'Accept-Language': 'en-US,en;q=0.9',
-                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-                    'Referer': 'https://www.google.com/',
-                }
-            )
-            
-            page = await context.new_page()
-            
-            # Hide webdriver
-            await page.add_init_script("""
-                Object.defineProperty(navigator, 'webdriver', {
-                    get: () => false,
-                });
-            """)
-            
-            # Navigate with retry logic
-            for attempt in range(self.max_retries):
+            return asyncio.run(self._crawl_many(urls))
+        except RuntimeError as exc:
+            if "asyncio.run() cannot be called" in str(exc):
+                loop = asyncio.new_event_loop()
                 try:
-                    await page.goto(url, wait_until='domcontentloaded', timeout=self.timeout * 1000)
-                    break
-                except Exception as e:
-                    if attempt < self.max_retries - 1:
-                        wait_time = 2 ** attempt + random.uniform(0, 1)
-                        logger.info(f"Retry {attempt + 1} for {url} after {wait_time}s")
-                        await asyncio.sleep(wait_time)
-                    else:
-                        raise
-            
-            # Wait for dynamic content
-            await asyncio.sleep(random.uniform(1, 3))
-            
-            # Get page content
-            html_content = await page.content()
-            
-            # Parse with BeautifulSoup
-            result = self._parse_page(url, html_content)
-            
-            # Try to scrape related pages (contact, about)
-            await self._scrape_related_pages(page, url, result)
-            
-            result['status'] = 'success'
-            return result
-            
-        except Exception as e:
-            logger.error(f"Error scraping {url}: {str(e)}")
-            return {
-                'url': url,
-                'company_name': None,
-                'emails': [],
-                'phone_numbers': [],
-                'addresses': [],
-                'status': 'error',
-                'error': str(e)
-            }
-        finally:
-            if page:
-                await page.close()
-            if context:
-                await context.close()
-    
-    def scrape_url(self, url: str) -> Dict[str, Any]:
-        """Synchronous single URL scraping with fallback to cloudscraper"""
+                    return loop.run_until_complete(self._crawl_many(urls))
+                except Exception as loop_exc:
+                    logger.exception("Async crawler failed inside existing event loop; falling back: %s", loop_exc)
+                    return [self._scrape_with_cloudscraper(url) for url in urls]
+                finally:
+                    loop.close()
+            logger.exception("Async crawler failed; falling back to cloudscraper/requests: %s", exc)
+            return [self._scrape_with_cloudscraper(url) for url in urls]
+        except Exception as exc:
+            logger.exception("Async crawler failed; falling back to cloudscraper/requests: %s", exc)
+            return [self._scrape_with_cloudscraper(url) for url in urls]
+
+    def scrape_url(self, url: str) -> dict[str, Any]:
+        return self.scrape_multiple_urls([url])[0]
+
+    def export_csv(self, results: list[dict[str, Any]], path: str | Path | None = None) -> str:
+        csv_text = self.csv_exporter.dumps(results)
+        if path:
+            self.csv_exporter.save(results, path)
+        return csv_text
+
+    def export_json(self, results: list[dict[str, Any]], path: str | Path | None = None) -> str:
+        json_text = self.json_exporter.dumps(results)
+        if path:
+            self.json_exporter.save(results, path)
+        return json_text
+
+    async def _crawl_many(self, urls: list[str]) -> list[dict[str, Any]]:
         try:
-            # Try Playwright first
+            from playwright.async_api import async_playwright
+        except Exception as exc:
+            raise RuntimeError("Playwright is required for rendered crawling. Install requirements and run `playwright install chromium`.") from exc
+
+        async with async_playwright() as playwright:
+            browser = await playwright.chromium.launch(
+                headless=True,
+                args=[
+                    "--disable-blink-features=AutomationControlled",
+                    "--disable-dev-shm-usage",
+                    "--no-sandbox",
+                ],
+            )
             try:
-                result = asyncio.run(self._scrape_url_async(url))
-                return result
-            except Exception as e:
-                logger.warning(f"Playwright failed for {url}, trying cloudscraper: {str(e)}")
-                # Fallback to cloudscraper for Cloudflare-protected sites
-                return self._scrape_with_cloudscraper(url)
-                
-        except Exception as e:
-            logger.error(f"Final error scraping {url}: {str(e)}")
-            return {
-                'url': url,
-                'company_name': None,
-                'emails': [],
-                'phone_numbers': [],
-                'addresses': [],
-                'status': 'error'
-            }
-    
-    async def _scrape_url_async(self, url: str) -> Dict[str, Any]:
-        """Async scraping for single URL"""
-        async with async_playwright() as p:
-            browser = await p.chromium.launch(headless=True)
-            context = await browser.new_context(user_agent=self.ua.random)
-            page = await context.new_page()
-            
-            try:
-                await page.goto(url, wait_until='domcontentloaded', timeout=self.timeout * 1000)
-                await asyncio.sleep(random.uniform(1, 2))
-                
-                html_content = await page.content()
-                result = self._parse_page(url, html_content)
-                result['status'] = 'success'
-                
-                return result
+                tasks = [self._crawl_seed(browser, url) for url in urls]
+                return await asyncio.gather(*tasks)
             finally:
-                await context.close()
                 await browser.close()
-    
-    def _scrape_with_cloudscraper(self, url: str) -> Dict[str, Any]:
-        """Fallback scraping using cloudscraper (for Cloudflare)"""
+
+    async def _crawl_seed(self, browser: Any, seed_url: str) -> dict[str, Any]:
+        discovered_urls = await self.discovery.discover(browser, seed_url)
+        queue = QueueManager()
+        for url in discovered_urls:
+            await queue.add(url)
+
+        page_results: list[dict[str, Any]] = []
+
+        async def worker() -> None:
+            while True:
+                job = await queue.get()
+                try:
+                    page_results.append(await self.deep.crawl(browser, job.url))
+                    self._save_partial(seed_url, page_results)
+                finally:
+                    queue.task_done()
+
+        workers = [asyncio.create_task(worker()) for _ in range(max(1, self.concurrency))]
+        await queue.join()
+        for task in workers:
+            task.cancel()
+        await asyncio.gather(*workers, return_exceptions=True)
+
+        return self._aggregate_seed_result(seed_url, discovered_urls, page_results)
+
+    def _aggregate_seed_result(self, seed_url: str, discovered_urls: list[str], page_results: list[dict[str, Any]]) -> dict[str, Any]:
+        companies = []
+        quotes = []
+        errors = []
+        for result in page_results:
+            companies.extend(result.get("companies", []))
+            quotes.extend(result.get("quotes", []))
+            if result.get("status") == "error":
+                errors.append({"source_url": result.get("source_url"), "error": result.get("error")})
+
+        companies = self.entity_matcher.merge_entities(companies)
+        quotes = self._dedupe_quotes(quotes)
+
+        result = {
+            "source_url": seed_url,
+            "discovered_urls": discovered_urls,
+            "companies": companies,
+            "quotes": quotes,
+            "status": "partial" if errors and (companies or quotes) else "error" if errors else "success",
+            "errors": errors,
+        }
+        self._add_legacy_fields(result)
+        return result
+
+    def _add_legacy_fields(self, result: dict[str, Any]) -> None:
+        primary = result.get("companies", [{}])[0] if result.get("companies") else {}
+        result["url"] = result.get("source_url")
+        result["company_name"] = primary.get("company_name")
+        result["emails"] = unique_keep_order(
+            email for company in result.get("companies", []) for email in company.get("emails", [])
+        )
+        result["phone_numbers"] = unique_keep_order(
+            phone for company in result.get("companies", []) for phone in company.get("phone_numbers", [])
+        )
+        result["addresses"] = unique_keep_order(
+            address for company in result.get("companies", []) for address in company.get("addresses", [])
+        )
+
+    def _dedupe_quotes(self, quotes: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        output: list[dict[str, Any]] = []
+        seen: set[str] = set()
+        for quote in sorted(quotes, key=lambda item: item.get("confidence", 0), reverse=True):
+            key = "|".join(
+                [
+                    str(quote.get("company", "")).lower(),
+                    str(quote.get("title", "")).lower(),
+                    str(quote.get("price", "")).lower(),
+                    str(quote.get("source_url", "")).lower(),
+                ]
+            )
+            if key in seen:
+                continue
+            seen.add(key)
+            output.append(quote)
+        return output
+
+    def _save_partial(self, seed_url: str, page_results: list[dict[str, Any]]) -> None:
+        if not self.partial_save_dir or not page_results:
+            return
+        try:
+            safe_name = "".join(ch if ch.isalnum() else "_" for ch in seed_url)[:120]
+            path = Path(self.partial_save_dir) / f"{safe_name}.partial.json"
+            path.parent.mkdir(parents=True, exist_ok=True)
+            self.json_exporter.save(page_results, path)
+        except Exception as exc:
+            logger.debug("Partial save failed for %s: %s", seed_url, exc)
+
+    def _scrape_with_cloudscraper(self, url: str) -> dict[str, Any]:
         try:
             response = self.cs.get(url, timeout=self.timeout)
             response.raise_for_status()
-            
-            result = self._parse_page(url, response.text)
-            result['status'] = 'success'
+            companies = self.deep.entity_extractor.extract(response.text, url)
+            quotes = self.deep.quote_extractor.extract(response.text, url)
+            quotes = self.deep.quote_matcher.match(quotes, companies)
+            result = {
+                "source_url": url,
+                "discovered_urls": [url],
+                "companies": companies,
+                "quotes": quotes,
+                "status": "success",
+                "errors": [],
+            }
+            self._add_legacy_fields(result)
             return result
-            
-        except Exception as e:
-            logger.error(f"Cloudscraper error for {url}: {str(e)}")
+        except Exception as exc:
+            logger.exception("Cloudscraper fallback failed for %s", url)
             return {
-                'url': url,
-                'company_name': None,
-                'emails': [],
-                'phone_numbers': [],
-                'addresses': [],
-                'status': 'error'
+                "source_url": url,
+                "url": url,
+                "companies": [],
+                "quotes": [],
+                "company_name": None,
+                "emails": [],
+                "phone_numbers": [],
+                "addresses": [],
+                "status": "error",
+                "errors": [{"source_url": url, "error": str(exc)}],
             }
-    
-    async def _scrape_related_pages(self, page: Page, base_url: str, result: Dict) -> None:
-        """Try to scrape contact and about pages for more info"""
-        related_paths = ['/contact', '/about', '/contact-us', '/contact-information']
-        
-        for path in related_paths:
-            try:
-                related_url = urljoin(base_url, path)
-                await asyncio.sleep(random.uniform(0.5, 1.5))
-                
-                await page.goto(related_url, wait_until='domcontentloaded', timeout=10000)
-                await asyncio.sleep(random.uniform(0.5, 1))
-                
-                html = await page.content()
-                related_data = self._extract_contact_info(html)
-                
-                # Merge results
-                result['emails'].extend(related_data.get('emails', []))
-                result['phone_numbers'].extend(related_data.get('phone_numbers', []))
-                result['addresses'].extend(related_data.get('addresses', []))
-                
-            except Exception as e:
-                logger.debug(f"Could not scrape {related_url}: {str(e)}")
-                continue
-
-        result['emails'] = list(set(result['emails']))[:10]
-        result['phone_numbers'] = list(set(result['phone_numbers']))[:10]
-        result['addresses'] = list(set(result['addresses']))[:10]
-    
-    def _parse_page(self, url: str, html: str) -> Dict[str, Any]:
-        """Parse HTML content and extract information"""
-        try:
-            soup = BeautifulSoup(html, 'lxml')
-            
-            # Extract company name
-            company_name = self._extract_company_name(soup, url)
-            
-            # Extract contact information
-            contact_info = self._extract_contact_info(html)
-            
-            return {
-                'url': url,
-                'company_name': company_name,
-                'emails': list(set(contact_info.get('emails', []))),  # Remove duplicates
-                'phone_numbers': list(set(contact_info.get('phone_numbers', []))),
-                'addresses': list(set(contact_info.get('addresses', []))),
-                'status': 'pending'
-            }
-        except Exception as e:
-            logger.error(f"Parse error for {url}: {str(e)}")
-            return {
-                'url': url,
-                'company_name': None,
-                'emails': [],
-                'phone_numbers': [],
-                'addresses': [],
-                'status': 'error'
-            }
-    
-    def _extract_company_name(self, soup: BeautifulSoup, url: str) -> Optional[str]:
-        """Extract company name from page"""
-        try:
-            # Try various common selectors
-            selectors = [
-                'h1',
-                '.company-name',
-                '[property="og:site_name"]',
-                'meta[name="application-name"]',
-                '.logo-text',
-                'title'
-            ]
-            
-            for selector in selectors:
-                if selector.startswith('['):
-                    elem = soup.select_one(selector)
-                    if elem:
-                        name = elem.get('content')
-                        if name:
-                            return name
-                else:
-                    elem = soup.select_one(selector)
-                    if elem and elem.get_text(strip=True):
-                        return elem.get_text(strip=True)[:100]
-            
-            # Fallback to domain name
-            domain = urlparse(url).netloc.replace('www.', '')
-            return domain.split('.')[0].title() if domain else None
-            
-        except Exception as e:
-            logger.debug(f"Error extracting company name: {str(e)}")
-            return None
-    
-    def _extract_contact_info(self, html: str) -> Dict[str, List[str]]:
-        """Extract emails, phones, and addresses from HTML"""
-        emails = []
-        phones = []
-        addresses = []
-        
-        try:
-            # Extract emails
-            email_pattern = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'
-            emails = list(set(re.findall(email_pattern, html)))
-            
-            # Filter out common false positives
-            emails = [e for e in emails if not any(
-                skip in e.lower() for skip in 
-                ['example.com', 'test.com', 'domain.com', 'placeholder']
-            )][:10]  # Limit to 10 emails
-            
-        except Exception as e:
-            logger.debug(f"Error extracting emails: {str(e)}")
-        
-        try:
-            # Extract phone numbers (basic patterns)
-            phone_patterns = [
-                r'\+?1?\s*[-.\s]?\(?([2-9]\d{2})\)?[-.\s]?([2-9]\d{2})[-.\s]?(\d{4})',  # US
-                r'\+\d{1,3}[-.\s]?\(??\d{1,4}\)?[-.\s]?\d{1,4}[-.\s]?\d{1,9}',  # International
-                r'\(?([0-9]{3})\)?[-.\s]?([0-9]{3})[-.\s]?([0-9]{4})',  # Common
-            ]
-            
-            for pattern in phone_patterns:
-                matches = re.findall(pattern, html)
-                for match in matches:
-                    if isinstance(match, tuple):
-                        phone = ''.join(match)
-                    else:
-                        phone = match
-                    if len(phone) >= 7:  # Minimum phone number length
-                        phones.append(phone)
-            
-            phones = list(set(phones))[:10]  # Deduplicate and limit
-            
-        except Exception as e:
-            logger.debug(f"Error extracting phones: {str(e)}")
-        
-        try:
-            # Extract addresses (simple pattern matching)
-            soup = BeautifulSoup(html, 'lxml')
-            
-            # Look for common address containers
-            address_selectors = [
-                '.address',
-                '.contact-address',
-                '.location',
-                'address',
-                '[data-address]',
-                '.business-address'
-            ]
-            
-            for selector in address_selectors:
-                elems = soup.select(selector)
-                for elem in elems:
-                    addr_text = elem.get_text(strip=True)
-                    if addr_text and len(addr_text) > 10:
-                        addresses.append(addr_text[:200])
-            
-            addresses = list(set(addresses))[:10]  # Deduplicate and limit
-            
-        except Exception as e:
-            logger.debug(f"Error extracting addresses: {str(e)}")
-        
-        return {
-            'emails': emails,
-            'phone_numbers': phones,
-            'addresses': addresses
-        }
