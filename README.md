@@ -111,6 +111,8 @@ playwright install chromium
 gunicorn -w 4 -b 0.0.0.0:5000 app:app
 ```
 
+Render will use Python `3.12.8` from `runtime.txt` to avoid Python 3.14 build incompatibilities in native dependencies.
+
 ## Environment Variables
 
 ### Backend (.env)
