@@ -54,6 +54,8 @@ python -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 playwright install chromium
+# create local config
+cp .env.example .env
 python app.py
 ```
 
@@ -118,6 +120,22 @@ MAX_RETRIES=3
 ### Frontend (.env)
 ```
 PUBLIC_API_URL=https://your-backend-api.com
+```
+
+The frontend uses `PUBLIC_API_URL` as the API base URL and appends `/api/scrape`.
+
+## Validation
+
+### Frontend
+```bash
+cd cardosox
+npm run build
+```
+
+### Backend
+```bash
+cd backend
+python -m py_compile app.py scraper.py utils.py
 ```
 
 ## API Documentation
