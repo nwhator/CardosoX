@@ -14,6 +14,7 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 ```bash
 pip install -r requirements.txt
 playwright install chromium
+cp .env.example .env
 ```
 
 ## Running the Server

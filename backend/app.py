@@ -3,12 +3,15 @@ CardosoX Scraper - Flask Backend
 Production-ready web scraping API with anti-bot features
 """
 
+import os
+from datetime import datetime
+
+from dotenv import load_dotenv
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-from datetime import datetime
 import logging
 from scraper import WebScraper
-from utils import validate_urls, format_response
+from utils import validate_urls
 
 # Configure logging
 logging.basicConfig(
@@ -16,10 +19,21 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+load_dotenv()
 
 # Initialize Flask app
 app = Flask(__name__)
-CORS(app)
+
+
+def _parse_origins(origins_value: str):
+    """Parse CORS origins from comma-separated env var."""
+    if not origins_value:
+        return '*'
+    origins = [origin.strip() for origin in origins_value.split(',') if origin.strip()]
+    return origins or '*'
+
+
+CORS(app, resources={r"/api/*": {"origins": _parse_origins(os.getenv('CORS_ORIGINS', ''))}})
 
 # Initialize scraper
 scraper = WebScraper()
@@ -62,7 +76,7 @@ def scrape_urls():
     }
     """
     try:
-        data = request.get_json()
+        data = request.get_json(silent=True)
         
         if not data or 'urls' not in data:
             return jsonify({
@@ -80,10 +94,11 @@ def scrape_urls():
                 'message': validation_result['message']
             }), 400
         
-        logger.info(f"Starting scrape for {len(urls)} URLs")
+        valid_urls = validation_result.get('valid_urls', [])
+        logger.info(f"Starting scrape for {len(valid_urls)} URLs")
         
         # Perform scraping
-        results = scraper.scrape_multiple_urls(urls)
+        results = scraper.scrape_multiple_urls(valid_urls)
         
         logger.info(f"Completed scraping {len(results)} URLs")
         
@@ -114,7 +129,7 @@ def scrape_single_url():
     }
     """
     try:
-        data = request.get_json()
+        data = request.get_json(silent=True)
         
         if not data or 'url' not in data:
             return jsonify({
@@ -138,9 +153,10 @@ def scrape_single_url():
                 'message': validation_result['message']
             }), 400
         
-        logger.info(f"Scraping single URL: {url}")
-        
-        result = scraper.scrape_url(url)
+        validated_url = validation_result.get('valid_urls', [url])[0]
+        logger.info(f"Scraping single URL: {validated_url}")
+
+        result = scraper.scrape_url(validated_url)
         
         return jsonify({
             'status': 'success',
@@ -178,4 +194,8 @@ def internal_error(error):
 if __name__ == '__main__':
     # Note: For production, use a proper WSGI server like Gunicorn
     # gunicorn -w 4 -b 0.0.0.0:5000 app:app
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    app.run(
+        debug=os.getenv('FLASK_DEBUG', 'false').lower() == 'true',
+        host='0.0.0.0',
+        port=int(os.getenv('API_PORT', '5000'))
+    )

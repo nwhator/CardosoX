@@ -8,11 +8,10 @@ import logging
 from typing import List, Dict, Any, Optional
 from urllib.parse import urljoin, urlparse
 import re
-from datetime import datetime
+import os
 import random
-import time
 
-from playwright.async_api import async_playwright, Browser, BrowserContext, Page
+from playwright.async_api import async_playwright, Browser, Page
 from bs4 import BeautifulSoup
 from fake_useragent import UserAgent
 import cloudscraper
@@ -26,8 +25,8 @@ class WebScraper:
     def __init__(self):
         self.ua = UserAgent()
         self.cs = cloudscraper.create_scraper()
-        self.max_retries = 3
-        self.timeout = 30
+        self.max_retries = int(os.getenv('MAX_RETRIES', '3'))
+        self.timeout = int(os.getenv('SCRAPER_TIMEOUT', '30'))
         
     def scrape_multiple_urls(self, urls: List[str]) -> List[Dict[str, Any]]:
         """Scrape multiple URLs concurrently"""
@@ -58,11 +57,11 @@ class WebScraper:
             
             # Handle exceptions in results
             processed_results = []
-            for result in results:
+            for url, result in zip(urls, results):
                 if isinstance(result, Exception):
                     logger.error(f"Error in async scraping: {str(result)}")
                     processed_results.append({
-                        'url': 'unknown',
+                        'url': url,
                         'company_name': None,
                         'emails': [],
                         'phone_numbers': [],
@@ -232,6 +231,10 @@ class WebScraper:
             except Exception as e:
                 logger.debug(f"Could not scrape {related_url}: {str(e)}")
                 continue
+
+        result['emails'] = list(set(result['emails']))[:10]
+        result['phone_numbers'] = list(set(result['phone_numbers']))[:10]
+        result['addresses'] = list(set(result['addresses']))[:10]
     
     def _parse_page(self, url: str, html: str) -> Dict[str, Any]:
         """Parse HTML content and extract information"""
