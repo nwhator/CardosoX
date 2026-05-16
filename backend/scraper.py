@@ -37,7 +37,9 @@ class WebScraper:
         self.max_retries = int(os.getenv("MAX_RETRIES", "3"))
         self.timeout = int(os.getenv("SCRAPER_TIMEOUT", "30"))
         self.concurrency = int(os.getenv("SCRAPER_WORKERS", "3"))
-        self.max_discovery_links = int(os.getenv("MAX_DISCOVERY_LINKS", "20"))
+        self.max_discovery_links = int(os.getenv("MAX_DISCOVERY_LINKS", os.getenv("MAX_CRAWL_PAGES", "150")))
+        self.max_crawl_pages = int(os.getenv("MAX_CRAWL_PAGES", str(self.max_discovery_links)))
+        self.crawl_depth = int(os.getenv("CRAWL_DEPTH", "2"))
         self.default_region = os.getenv("PHONE_DEFAULT_REGION", "NG")
         self.partial_save_dir = os.getenv("PARTIAL_SAVE_DIR", "").strip()
 
@@ -114,7 +116,9 @@ class WebScraper:
         discovered_urls = await self.discovery.discover(browser, seed_url)
         queue = QueueManager()
         for url in discovered_urls:
-            await queue.add(url)
+            if len(queue.visited) >= self.max_crawl_pages:
+                break
+            await queue.add(url, depth=0)
 
         page_results: list[dict[str, Any]] = []
 
@@ -122,7 +126,13 @@ class WebScraper:
             while True:
                 job = await queue.get()
                 try:
-                    page_results.append(await self.deep.crawl(browser, job.url))
+                    result = await self.deep.crawl(browser, job.url)
+                    page_results.append(result)
+                    if job.depth < self.crawl_depth:
+                        for link in result.get("discovered_links", []):
+                            if len(queue.visited) >= self.max_crawl_pages:
+                                break
+                            await queue.add(link, depth=job.depth + 1)
                     self._save_partial(seed_url, page_results)
                 finally:
                     queue.task_done()
@@ -151,6 +161,7 @@ class WebScraper:
         result = {
             "source_url": seed_url,
             "discovered_urls": discovered_urls,
+            "crawled_urls": [result.get("source_url") for result in page_results if result.get("source_url")],
             "companies": companies,
             "quotes": quotes,
             "status": "partial" if errors and (companies or quotes) else "error" if errors else "success",

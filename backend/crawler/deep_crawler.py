@@ -6,6 +6,7 @@ import asyncio
 import logging
 from typing import Any
 
+from crawler.discovery_crawler import DiscoveryCrawler
 from extractors.entity_extractor import EntityExtractor
 from quote_crawler.quote_extractor import QuoteExtractor
 from quote_crawler.quote_matcher import QuoteMatcher
@@ -20,6 +21,7 @@ class DeepCrawler:
         self.entity_extractor = EntityExtractor(default_region=default_region)
         self.quote_extractor = QuoteExtractor()
         self.quote_matcher = QuoteMatcher()
+        self.link_extractor = DiscoveryCrawler(timeout_ms=timeout_ms)
 
     async def crawl(self, browser: Any, url: str) -> dict:
         context = await browser.new_context(
@@ -46,10 +48,12 @@ class DeepCrawler:
             companies = self.entity_extractor.extract(html, url)
             quotes = self.quote_extractor.extract(html, url)
             quotes = self.quote_matcher.match(quotes, companies)
+            discovered_links = self.link_extractor.extract_internal_urls(html, url)
             return {
                 "source_url": url,
                 "companies": companies,
                 "quotes": quotes,
+                "discovered_links": discovered_links,
                 "status": "success",
             }
         except Exception as exc:
@@ -58,6 +62,7 @@ class DeepCrawler:
                 "source_url": url,
                 "companies": [],
                 "quotes": [],
+                "discovered_links": [],
                 "status": "error",
                 "error": str(exc),
             }
@@ -72,10 +77,13 @@ class DeepCrawler:
         await page.evaluate(
             """
             async () => {
-              const steps = 4;
-              for (let i = 1; i <= steps; i++) {
-                window.scrollTo(0, document.body.scrollHeight * i / steps);
-                await new Promise(resolve => setTimeout(resolve, 250));
+              let lastHeight = 0;
+              for (let i = 0; i < 8; i++) {
+                const height = document.body.scrollHeight;
+                window.scrollTo(0, height);
+                await new Promise(resolve => setTimeout(resolve, 350));
+                if (height === lastHeight) break;
+                lastHeight = height;
               }
               window.scrollTo(0, 0);
             }

@@ -37,6 +37,52 @@
         </span>
       </button>
     </div>
+
+    <div id="progressSection" class="glass mt-6 p-6 rounded-2xl hidden">
+      <div class="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+        <div>
+          <p class="mb-2 text-xs uppercase tracking-[0.28em] text-on-surface-variant">Crawler progress</p>
+          <h3 id="progressStatus" class="text-xl font-semibold text-on-surface">Preparing crawl</h3>
+        </div>
+        <div class="grid grid-cols-3 gap-3 text-right">
+          <div>
+            <p class="text-xs uppercase tracking-[0.18em] text-on-surface-variant">Elapsed</p>
+            <p id="progressElapsed" class="font-code-sm text-on-surface">00:00</p>
+          </div>
+          <div>
+            <p class="text-xs uppercase tracking-[0.18em] text-on-surface-variant">ETA</p>
+            <p id="progressEta" class="font-code-sm text-on-surface">--:--</p>
+          </div>
+          <div>
+            <p class="text-xs uppercase tracking-[0.18em] text-on-surface-variant">Progress</p>
+            <p id="progressPercent" class="font-code-sm text-on-surface">0%</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="mt-5 h-3 overflow-hidden rounded-full bg-white/10 border border-white/10">
+        <div id="progressBar" class="h-full w-0 rounded-full bg-white transition-all duration-700 ease-out"></div>
+      </div>
+
+      <div class="mt-5 grid gap-3 sm:grid-cols-4">
+        <div class="rounded-xl border border-white/10 bg-white/5 p-4">
+          <p class="text-xs uppercase tracking-[0.18em] text-on-surface-variant">URLs</p>
+          <p id="progressUrls" class="mt-2 text-2xl font-semibold text-on-surface">0</p>
+        </div>
+        <div class="rounded-xl border border-white/10 bg-white/5 p-4">
+          <p class="text-xs uppercase tracking-[0.18em] text-on-surface-variant">Listings</p>
+          <p id="progressListings" class="mt-2 text-2xl font-semibold text-on-surface">0</p>
+        </div>
+        <div class="rounded-xl border border-white/10 bg-white/5 p-4">
+          <p class="text-xs uppercase tracking-[0.18em] text-on-surface-variant">Quotes</p>
+          <p id="progressQuotes" class="mt-2 text-2xl font-semibold text-on-surface">0</p>
+        </div>
+        <div class="rounded-xl border border-white/10 bg-white/5 p-4">
+          <p class="text-xs uppercase tracking-[0.18em] text-on-surface-variant">Pages</p>
+          <p id="progressPages" class="mt-2 text-2xl font-semibold text-on-surface">0</p>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -122,6 +168,7 @@
     addresses?: string[];
     companies?: CompanyResult[];
     quotes?: QuoteResult[];
+    crawled_urls?: string[];
     status?: string;
   }
 
@@ -139,6 +186,10 @@
   }
 
   let scrapeResults: ScrapeResult[] = [];
+  let progressTimer: number | undefined;
+  let progressStartedAt = 0;
+  let progressEstimateSeconds = 0;
+  let currentProgress = 0;
 
   const urlsInput = document.getElementById('urlsInput') as HTMLTextAreaElement;
   const addMoreBtn = document.getElementById('addMoreBtn') as HTMLButtonElement;
@@ -149,6 +200,16 @@
   const downloadCSVBtn = document.getElementById('downloadCSVBtn') as HTMLButtonElement;
   const downloadJSONBtn = document.getElementById('downloadJSONBtn') as HTMLButtonElement;
   const notificationsContainer = document.getElementById('notificationsContainer') as HTMLElement;
+  const progressSection = document.getElementById('progressSection') as HTMLElement;
+  const progressStatus = document.getElementById('progressStatus') as HTMLElement;
+  const progressElapsed = document.getElementById('progressElapsed') as HTMLElement;
+  const progressEta = document.getElementById('progressEta') as HTMLElement;
+  const progressPercent = document.getElementById('progressPercent') as HTMLElement;
+  const progressBar = document.getElementById('progressBar') as HTMLElement;
+  const progressUrls = document.getElementById('progressUrls') as HTMLElement;
+  const progressListings = document.getElementById('progressListings') as HTMLElement;
+  const progressQuotes = document.getElementById('progressQuotes') as HTMLElement;
+  const progressPages = document.getElementById('progressPages') as HTMLElement;
 
   addMoreBtn.addEventListener('click', () => {
     const urls = urlsInput.value.trim().split('\n').filter(url => url.trim());
@@ -184,6 +245,7 @@
     }
 
     setLoading(true);
+    startProgress(urls.length);
 
     try {
       const response = await fetch(API_URL, {
@@ -196,14 +258,17 @@
       if (response.ok) {
         scrapeResults = data.results || [];
         updateResultsTable();
+        completeProgress(scrapeResults);
         resultsSection.classList.remove('hidden');
         showNotification('Scraping completed', 'success');
         setTimeout(() => resultsSection.scrollIntoView({ behavior: 'smooth' }), 300);
       } else {
+        failProgress();
         showNotification(data.message || 'Scraping failed', 'error');
       }
     } catch (error) {
       console.error('Scraping error:', error);
+      failProgress();
       showNotification(`Failed to connect to scraper at ${apiBaseUrl}`, 'error');
     } finally {
       setLoading(false);
@@ -338,6 +403,81 @@
     document.getElementById('loadingSpinner')!.classList.toggle('hidden', !isLoading);
   }
 
+  function startProgress(urlCount: number): void {
+    window.clearInterval(progressTimer);
+    progressSection.classList.remove('hidden');
+    progressStartedAt = Date.now();
+    progressEstimateSeconds = Math.max(45, urlCount * 70);
+    currentProgress = 4;
+    progressUrls.textContent = String(urlCount);
+    progressListings.textContent = '0';
+    progressQuotes.textContent = '0';
+    progressPages.textContent = '0';
+    progressStatus.textContent = 'Rendering pages and discovering inner links';
+    renderProgress(4, 0, progressEstimateSeconds);
+    progressTimer = window.setInterval(tickProgress, 1000);
+  }
+
+  function tickProgress(): void {
+    const elapsed = Math.floor((Date.now() - progressStartedAt) / 1000);
+    const expected = Math.min(92, 8 + Math.floor((elapsed / progressEstimateSeconds) * 84));
+    currentProgress = Math.max(currentProgress, expected);
+    const remaining = currentProgress >= 92 ? 0 : Math.max(progressEstimateSeconds - elapsed, 0);
+    progressStatus.textContent = currentProgress >= 92
+      ? 'Finalizing extraction and matching entities'
+      : progressMessage(currentProgress);
+    renderProgress(currentProgress, elapsed, remaining);
+  }
+
+  function completeProgress(results: ScrapeResult[]): void {
+    window.clearInterval(progressTimer);
+    const rows = flattenResults(results);
+    const quoteCount = results.reduce((total, result) => total + (result.quotes || []).length, 0);
+    const crawledPageCount = results.reduce((total, result) => {
+      return total + (result.crawled_urls || []).length;
+    }, 0);
+    const elapsed = Math.floor((Date.now() - progressStartedAt) / 1000);
+    progressListings.textContent = String(rows.length);
+    progressQuotes.textContent = String(quoteCount);
+    progressPages.textContent = String(crawledPageCount || results.length);
+    progressStatus.textContent = 'Crawl complete';
+    renderProgress(100, elapsed, 0);
+  }
+
+  function failProgress(): void {
+    window.clearInterval(progressTimer);
+    const elapsed = progressStartedAt ? Math.floor((Date.now() - progressStartedAt) / 1000) : 0;
+    progressStatus.textContent = 'Crawl failed';
+    renderProgress(currentProgress || 0, elapsed, 0);
+  }
+
+  function renderProgress(percent: number, elapsedSeconds: number, remainingSeconds: number): void {
+    const safePercent = Math.max(0, Math.min(100, percent));
+    progressBar.style.width = `${safePercent}%`;
+    progressPercent.textContent = `${safePercent}%`;
+    progressElapsed.textContent = formatDuration(elapsedSeconds);
+    progressEta.textContent = safePercent >= 100 ? '00:00' : remainingSeconds > 0 ? formatDuration(remainingSeconds) : 'Finalizing';
+  }
+
+  function progressMessage(percent: number): string {
+    if (percent < 25) {
+      return 'Opening seed URLs and collecting same-domain links';
+    }
+    if (percent < 55) {
+      return 'Rendering discovered pages and scrolling dynamic listings';
+    }
+    if (percent < 80) {
+      return 'Extracting company blocks, phones, addresses, socials, and quotes';
+    }
+    return 'Merging matching entities and preparing exports';
+  }
+
+  function formatDuration(totalSeconds: number): string {
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+  }
+
   function isValidUrl(url: string): boolean {
     try {
       new URL(url);
@@ -459,4 +599,3 @@
     }
   }
 </style>
-
