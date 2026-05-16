@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import json
 import logging
-from urllib.parse import urljoin, urlparse
+import re
+from urllib.parse import urlparse
 
 from bs4 import BeautifulSoup, Tag
 
@@ -23,6 +24,12 @@ SOCIAL_DOMAINS = ("facebook.com", "instagram.com", "linkedin.com", "twitter.com"
 COMPANY_BLOCK_SELECTORS = [
     "[itemscope][itemtype*='Organization']",
     "[itemscope][itemtype*='LocalBusiness']",
+    "[data-company]",
+    "[data-business]",
+    "[data-listing]",
+    "[data-testid*='company']",
+    "[data-testid*='business']",
+    "[data-testid*='listing']",
     ".company-card",
     ".company",
     ".profile-card",
@@ -30,10 +37,20 @@ COMPANY_BLOCK_SELECTORS = [
     ".vendor-card",
     ".listing",
     ".directory-item",
+    "[class*='company-card']",
+    "[class*='business-card']",
+    "[class*='vendor-card']",
+    "[class*='profile-card']",
+    "[class*='listing-card']",
+    "[class*='directory-item']",
+    "[class*='search-result']",
+    "[class*='result-card']",
     "article",
     "li",
     "section",
 ]
+GENERIC_LISTING_CHILD_SELECTORS = ":scope > div, :scope > li, :scope > article, :scope > section, :scope > tr"
+CONTAINER_SELECTORS = "main, body, section, article, ul, ol, table, [class*='list'], [class*='grid'], [class*='results'], [class*='directory']"
 
 
 class EntityExtractor:
@@ -77,7 +94,34 @@ class EntityExtractor:
                 signals = self._block_signal_count(node)
                 if signals >= 2 or (signals >= 1 and self._extract_name(node)):
                     candidates.append(node)
+        candidates.extend(self._detect_repeated_listing_blocks(soup))
         return self._dedupe_nested_blocks(candidates)
+
+    def _detect_repeated_listing_blocks(self, soup: BeautifulSoup) -> list[Tag]:
+        """Find repeated sibling cards that do not expose useful class names.
+
+        Directory pages often render listings as plain sibling divs. This pass
+        prefers those sibling cards over their shared parent so each company
+        keeps only its own phone, address, email, website, and socials.
+        """
+        repeated_blocks: list[Tag] = []
+        for container in soup.select(CONTAINER_SELECTORS):
+            children = [child for child in container.select(GENERIC_LISTING_CHILD_SELECTORS) if isinstance(child, Tag)]
+            viable_children = [child for child in children if self._looks_like_listing_child(child)]
+            if len(viable_children) >= 2:
+                repeated_blocks.extend(viable_children)
+        return repeated_blocks
+
+    def _looks_like_listing_child(self, node: Tag) -> bool:
+        text = clean_text(node.get_text(" "))
+        if len(text) < 20:
+            return False
+        if len(text) > 1200:
+            return False
+        name = self._extract_name(node)
+        signals = self._block_signal_count(node)
+        contact_count = len(self.email_extractor.extract(node)) + len(self.phone_extractor.extract(node)) + len(self.address_extractor.extract(node))
+        return bool(name and (signals >= 2 or contact_count >= 1))
 
     def _block_signal_count(self, node: Tag) -> int:
         signals = 0
@@ -95,8 +139,11 @@ class EntityExtractor:
 
     def _dedupe_nested_blocks(self, blocks: list[Tag]) -> list[Tag]:
         output: list[Tag] = []
-        for block in blocks:
+        sorted_blocks = sorted(blocks, key=lambda node: len(clean_text(node.get_text(" "))))
+        for block in sorted_blocks:
             if any(existing in block.parents for existing in output):
+                continue
+            if any(existing in block.descendants for existing in output):
                 continue
             output = [existing for existing in output if block not in existing.parents]
             output.append(block)
@@ -112,6 +159,8 @@ class EntityExtractor:
 
         entity = {
             "company_name": clean_company_name(name),
+            "business_name": clean_company_name(name),
+            "listing_name": clean_company_name(name),
             "email": emails[0] if emails else None,
             "emails": emails,
             "phone": phones[0] if phones else None,
@@ -121,6 +170,7 @@ class EntityExtractor:
             "website": website or None,
             "socials": socials,
             "source_url": source_url,
+            "extraction_scope": "page_fallback" if fallback_page else "dom_block",
         }
         entity["confidence"] = entity_confidence(
             entity,
@@ -142,6 +192,21 @@ class EntityExtractor:
             "h2",
             "h3",
             "h4",
+            'a[href*="company"]',
+            'a[href*="profile"]',
+            'a[href*="business"]',
+            'a[href*="listing"]',
+            '[class*="company"][class*="name"]',
+            '[class*="business"][class*="name"]',
+            '[class*="listing"][class*="name"]',
+            '[class*="vendor"][class*="name"]',
+            '[class*="profile"][class*="name"]',
+            '[class*="title"]',
+            '[class*="heading"]',
+            '[class*="card-title"]',
+            '[class*="result-title"]',
+            "strong",
+            "b",
             'meta[property="og:site_name"]',
             "title",
         ]
@@ -153,7 +218,29 @@ class EntityExtractor:
             cleaned = clean_company_name(value)
             if has_real_entity_name(cleaned):
                 return cleaned
+        aria = clean_company_name(node.get("aria-label") if isinstance(node, Tag) else "")
+        if has_real_entity_name(aria):
+            return aria
+        img = node.select_one("img[alt]")
+        if img:
+            cleaned = clean_company_name(img.get("alt"))
+            if has_real_entity_name(cleaned):
+                return cleaned
+        text = clean_text(node.get_text("\n") if isinstance(node, Tag) else node.get_text("\n"))
+        for line in text.split("\n"):
+            candidate = clean_company_name(line)
+            if has_real_entity_name(candidate) and self._looks_like_name_line(candidate):
+                return candidate
         return ""
+
+    def _looks_like_name_line(self, value: str) -> bool:
+        if not 2 <= len(value) <= 90:
+            return False
+        if "@" in value or re.search(r"\d{5,}", value):
+            return False
+        if re.search(r"\b(street|road|avenue|lagos|abuja|nigeria|phone|email|address|price|from)\b", value, re.I):
+            return False
+        return True
 
     def _extract_website(self, node: BeautifulSoup | Tag, source_url: str) -> str:
         source_domain = domain_from_url(source_url)
@@ -204,6 +291,8 @@ class EntityExtractor:
                         address = ", ".join(clean_text(str(address.get(key, ""))) for key in ("streetAddress", "addressLocality", "addressRegion", "addressCountry") if address.get(key))
                     entity = {
                         "company_name": clean_company_name(node.get("name")),
+                        "business_name": clean_company_name(node.get("name")),
+                        "listing_name": clean_company_name(node.get("name")),
                         "email": clean_text(node.get("email")).lower() or None,
                         "emails": [clean_text(node.get("email")).lower()] if node.get("email") else [],
                         "phone": self.phone_extractor.normalize(str(node.get("telephone", ""))) or None,
@@ -213,6 +302,7 @@ class EntityExtractor:
                         "website": normalize_url(str(node.get("url", "")), source_url) or None,
                         "socials": [],
                         "source_url": source_url,
+                        "extraction_scope": "structured_data",
                     }
                     entity["confidence"] = entity_confidence(entity, {"structured_data": True})
                     if self._is_useful_entity(entity):
@@ -229,4 +319,3 @@ class EntityExtractor:
         if not has_real_entity_name(entity.get("company_name")):
             return False
         return bool(entity.get("email") or entity.get("phone") or entity.get("address") or entity.get("website") or entity.get("socials"))
-

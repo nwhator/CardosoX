@@ -3,44 +3,34 @@
 
 <div class="mt-24 min-h-screen pt-12 pb-12">
   <div class="max-w-4xl mx-auto px-6">
-    <!-- Header -->
     <div class="mb-12">
-      <h2 class="text-4xl font-bold mb-4 gradient-text">Web Scraper</h2>
-      <p class="text-on-surface-variant text-lg">Enter URLs to scrape data in bulk. Our advanced scraper extracts company information, emails, phone numbers, and addresses.</p>
+      <p class="mb-3 text-xs uppercase tracking-[0.28em] text-on-surface-variant">Entity crawler</p>
+      <h2 class="text-4xl md:text-5xl font-bold mb-4 gradient-text">Web Scraper</h2>
+      <p class="text-on-surface-variant text-lg">
+        Enter URLs to scrape data in bulk. The crawler extracts multiple company listings per URL, contacts, websites, socials, and pricing quotes.
+      </p>
     </div>
 
-    <!-- Form Card -->
-    <div class="glass glass-padding p-8 rounded-2xl hover-lift">
+    <div class="glass p-8 rounded-2xl hover-lift">
       <div class="mb-8">
         <label class="block text-on-surface font-semibold mb-3">URLs to Scrape</label>
         <p class="text-on-surface-variant text-sm mb-4">Enter one URL per line. Maximum 10 URLs per request.</p>
-        
-        <textarea 
+
+        <textarea
           id="urlsInput"
-          class="w-full h-48 bg-surface-container-low border border-outline-variant rounded-lg p-4 text-on-surface placeholder-on-surface-variant focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 resize-none font-code-sm"
+          class="w-full h-48 bg-white/5 border border-white/15 rounded-xl p-4 text-on-surface placeholder-on-surface-variant focus:outline-none focus:border-white focus:ring-2 focus:ring-white/20 resize-none font-code-sm"
           placeholder="https://example.com&#10;https://another-site.com&#10;https://third-site.com"
         ></textarea>
       </div>
 
-      <div id="urlsList" class="mb-8 space-y-2 hidden">
-        <p class="text-sm font-semibold text-on-surface">URLs to scrape:</p>
-        <div id="urlsDisplay" class="space-y-2"></div>
-      </div>
-
-      <button 
-        id="addMoreBtn"
-        class="btn-secondary text-sm mb-6 w-full sm:w-auto"
-      >
-        + Add More Links
+      <button id="addMoreBtn" class="btn-secondary text-sm mb-6 w-full sm:w-auto">
+        Add More Links
       </button>
 
-      <button 
-        id="startScrapingBtn"
-        class="btn-primary w-full py-4 font-semibold text-lg"
-      >
+      <button id="startScrapingBtn" class="btn-primary w-full py-4 font-semibold text-lg">
         <span id="btnText">Start Scraping</span>
         <span id="loadingSpinner" class="ml-2 hidden">
-          <svg class="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+          <svg class="animate-spin h-5 w-5 inline-block" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
             <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
           </svg>
@@ -50,67 +40,106 @@
   </div>
 </div>
 
-<!-- Results Section -->
 <div id="resultsSection" class="hidden">
   <div class="max-w-7xl mx-auto px-6 mt-12 mb-12">
-    <div class="flex items-center justify-between mb-8">
-      <h3 class="text-3xl font-bold gradient-text">Scraping Results</h3>
+    <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-8">
+      <div>
+        <p class="mb-2 text-xs uppercase tracking-[0.28em] text-on-surface-variant">Structured output</p>
+        <h3 class="text-3xl font-bold gradient-text">Scraping Results</h3>
+      </div>
       <div class="flex gap-4">
-        <button id="downloadCSVBtn" class="btn-secondary text-sm">
-          📥 CSV
-        </button>
-        <button id="downloadJSONBtn" class="btn-secondary text-sm">
-          📥 JSON
-        </button>
+        <button id="downloadCSVBtn" class="btn-secondary text-sm">Download CSV</button>
+        <button id="downloadJSONBtn" class="btn-secondary text-sm">Download JSON</button>
       </div>
     </div>
 
-    <!-- Results Table -->
     <div class="glass rounded-2xl overflow-hidden">
       <div class="overflow-x-auto">
-        <table class="w-full">
-          <thead class="border-b border-outline-variant">
-            <tr class="bg-surface-container">
-              <th class="px-6 py-4 text-left text-sm font-semibold text-on-surface">URL</th>
-              <th class="px-6 py-4 text-left text-sm font-semibold text-on-surface">Company</th>
-              <th class="px-6 py-4 text-left text-sm font-semibold text-on-surface">Emails</th>
-              <th class="px-6 py-4 text-left text-sm font-semibold text-on-surface">Phones</th>
-              <th class="px-6 py-4 text-left text-sm font-semibold text-on-surface">Address</th>
-              <th class="px-6 py-4 text-left text-sm font-semibold text-on-surface">Status</th>
+        <table class="w-full min-w-[1280px]">
+          <thead class="border-b border-white/10">
+            <tr class="bg-white/5">
+              <th class="px-5 py-4 text-left text-xs uppercase tracking-[0.14em] font-semibold text-on-surface-variant">Source URL</th>
+              <th class="px-5 py-4 text-left text-xs uppercase tracking-[0.14em] font-semibold text-on-surface-variant">Listing / Business</th>
+              <th class="px-5 py-4 text-left text-xs uppercase tracking-[0.14em] font-semibold text-on-surface-variant">Email</th>
+              <th class="px-5 py-4 text-left text-xs uppercase tracking-[0.14em] font-semibold text-on-surface-variant">Phone</th>
+              <th class="px-5 py-4 text-left text-xs uppercase tracking-[0.14em] font-semibold text-on-surface-variant">Address</th>
+              <th class="px-5 py-4 text-left text-xs uppercase tracking-[0.14em] font-semibold text-on-surface-variant">Website</th>
+              <th class="px-5 py-4 text-left text-xs uppercase tracking-[0.14em] font-semibold text-on-surface-variant">Socials</th>
+              <th class="px-5 py-4 text-left text-xs uppercase tracking-[0.14em] font-semibold text-on-surface-variant">Quotes</th>
+              <th class="px-5 py-4 text-left text-xs uppercase tracking-[0.14em] font-semibold text-on-surface-variant">Confidence</th>
+              <th class="px-5 py-4 text-left text-xs uppercase tracking-[0.14em] font-semibold text-on-surface-variant">Status</th>
             </tr>
           </thead>
-          <tbody id="resultsTableBody" class="divide-y divide-outline-variant">
-          </tbody>
+          <tbody id="resultsTableBody" class="divide-y divide-white/10"></tbody>
         </table>
       </div>
     </div>
 
-    <!-- Empty State -->
     <div id="emptyState" class="text-center py-12">
       <p class="text-on-surface-variant">No results yet. Start scraping to see data here.</p>
     </div>
   </div>
 </div>
 
-<!-- Notifications -->
 <div id="notificationsContainer" class="fixed bottom-6 right-6 space-y-4 max-w-sm"></div>
 
 <script>
   const apiBaseUrl = (import.meta.env.PUBLIC_API_URL || 'http://localhost:5000').replace(/\/$/, '');
   const API_URL = `${apiBaseUrl}/api/scrape`;
 
+  interface CompanyResult {
+    company_name?: string;
+    business_name?: string;
+    listing_name?: string;
+    email?: string;
+    emails?: string[];
+    phone?: string;
+    phone_numbers?: string[];
+    address?: string;
+    addresses?: string[];
+    website?: string;
+    socials?: string[];
+    source_url?: string;
+    confidence?: number;
+  }
+
+  interface QuoteResult {
+    company?: string;
+    title?: string;
+    price?: string;
+    currency?: string;
+    description?: string;
+    source_url?: string;
+    confidence?: number;
+  }
+
   interface ScrapeResult {
-    url: string;
-    company_name: string;
-    emails: string[];
-    phone_numbers: string[];
-    addresses: string[];
+    source_url?: string;
+    url?: string;
+    company_name?: string;
+    emails?: string[];
+    phone_numbers?: string[];
+    addresses?: string[];
+    companies?: CompanyResult[];
+    quotes?: QuoteResult[];
+    status?: string;
+  }
+
+  interface TableRow {
+    sourceUrl: string;
+    listingName: string;
+    email: string;
+    phone: string;
+    address: string;
+    website: string;
+    socials: string[];
+    quotes: QuoteResult[];
+    confidence?: number;
     status: string;
   }
 
   let scrapeResults: ScrapeResult[] = [];
 
-  // DOM Elements
   const urlsInput = document.getElementById('urlsInput') as HTMLTextAreaElement;
   const addMoreBtn = document.getElementById('addMoreBtn') as HTMLButtonElement;
   const startScrapingBtn = document.getElementById('startScrapingBtn') as HTMLButtonElement;
@@ -121,7 +150,6 @@
   const downloadJSONBtn = document.getElementById('downloadJSONBtn') as HTMLButtonElement;
   const notificationsContainer = document.getElementById('notificationsContainer') as HTMLElement;
 
-  // Add More Links
   addMoreBtn.addEventListener('click', () => {
     const urls = urlsInput.value.trim().split('\n').filter(url => url.trim());
     if (urls.length >= 10) {
@@ -131,16 +159,14 @@
     urlsInput.value += '\n';
     urlsInput.focus();
     urlsInput.style.height = 'auto';
-    urlsInput.style.height = urlsInput.scrollHeight + 'px';
+    urlsInput.style.height = `${urlsInput.scrollHeight}px`;
   });
 
-  // Auto-expand textarea
   urlsInput.addEventListener('input', () => {
     urlsInput.style.height = 'auto';
-    urlsInput.style.height = urlsInput.scrollHeight + 'px';
+    urlsInput.style.height = `${urlsInput.scrollHeight}px`;
   });
 
-  // Start Scraping
   startScrapingBtn.addEventListener('click', async () => {
     const urls = urlsInput.value
       .split('\n')
@@ -157,32 +183,22 @@
       return;
     }
 
-    startScrapingBtn.disabled = true;
-    startScrapingBtn.style.opacity = '0.6';
-    document.getElementById('btnText')!.textContent = 'Scraping...';
-    document.getElementById('loadingSpinner')!.classList.remove('hidden');
+    setLoading(true);
 
     try {
       const response = await fetch(API_URL, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ urls })
       });
-
       const data = await response.json();
-      
+
       if (response.ok) {
         scrapeResults = data.results || [];
         updateResultsTable();
         resultsSection.classList.remove('hidden');
-        showNotification('Scraping completed!', 'success');
-        
-        // Scroll to results
-        setTimeout(() => {
-          resultsSection.scrollIntoView({ behavior: 'smooth' });
-        }, 300);
+        showNotification('Scraping completed', 'success');
+        setTimeout(() => resultsSection.scrollIntoView({ behavior: 'smooth' }), 300);
       } else {
         showNotification(data.message || 'Scraping failed', 'error');
       }
@@ -190,49 +206,138 @@
       console.error('Scraping error:', error);
       showNotification(`Failed to connect to scraper at ${apiBaseUrl}`, 'error');
     } finally {
-      startScrapingBtn.disabled = false;
-      startScrapingBtn.style.opacity = '1';
-      document.getElementById('btnText')!.textContent = 'Start Scraping';
-      document.getElementById('loadingSpinner')!.classList.add('hidden');
+      setLoading(false);
     }
   });
 
-  // Download CSV
   downloadCSVBtn.addEventListener('click', () => {
     if (scrapeResults.length === 0) {
       showNotification('No results to download', 'error');
       return;
     }
 
-    const headers = ['URL', 'Company Name', 'Emails', 'Phone Numbers', 'Addresses', 'Status'];
-    const rows = scrapeResults.map(result => [
-      result.url,
-      result.company_name || 'N/A',
-      (result.emails || []).join('; ') || 'N/A',
-      (result.phone_numbers || []).join('; ') || 'N/A',
-      (result.addresses || []).join('; ') || 'N/A',
-      result.status || 'N/A'
+    const headers = ['Source URL', 'Listing / Business Name', 'Email', 'Phone', 'Address', 'Website', 'Socials', 'Quotes', 'Confidence', 'Status'];
+    const rows = flattenResults(scrapeResults).map(row => [
+      row.sourceUrl,
+      row.listingName || 'N/A',
+      row.email || 'N/A',
+      row.phone || 'N/A',
+      row.address || 'N/A',
+      row.website || 'N/A',
+      row.socials.join('; ') || 'N/A',
+      formatQuotes(row.quotes) || 'N/A',
+      formatConfidence(row.confidence),
+      row.status || 'N/A'
     ]);
 
-    const csv = [headers, ...rows].map(row => 
-      row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')
-    ).join('\n');
+    const csv = [headers, ...rows]
+      .map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+      .join('\n');
 
     downloadFile(csv, 'scraping-results.csv', 'text/csv');
   });
 
-  // Download JSON
   downloadJSONBtn.addEventListener('click', () => {
     if (scrapeResults.length === 0) {
       showNotification('No results to download', 'error');
       return;
     }
-
-    const json = JSON.stringify(scrapeResults, null, 2);
-    downloadFile(json, 'scraping-results.json', 'application/json');
+    downloadFile(JSON.stringify(scrapeResults, null, 2), 'scraping-results.json', 'application/json');
   });
 
-  // Helper Functions
+  function updateResultsTable(): void {
+    resultsTableBody.innerHTML = '';
+    const rows = flattenResults(scrapeResults);
+
+    if (rows.length === 0) {
+      emptyState.classList.remove('hidden');
+      return;
+    }
+
+    emptyState.classList.add('hidden');
+
+    rows.forEach((result, index) => {
+      const row = document.createElement('tr');
+      row.className = 'hover:bg-white/5 transition-colors';
+      row.style.animation = `fadeInUp 0.5s ease-out ${index * 0.05}s both`;
+
+      const safeUrl = sanitizeExternalUrl(result.sourceUrl);
+      const safeWebsite = sanitizeExternalUrl(result.website);
+      row.innerHTML = `
+        <td class="px-5 py-4 text-sm text-on-surface-variant truncate max-w-xs">
+          <a href="${safeUrl}" target="_blank" rel="noopener noreferrer" class="hover:text-white transition-colors">
+            ${escapeHtml(result.sourceUrl)}
+          </a>
+        </td>
+        <td class="px-5 py-4 text-sm text-on-surface font-semibold min-w-56">${escapeHtml(result.listingName || '-')}</td>
+        <td class="px-5 py-4 text-sm">${chip(result.email)}</td>
+        <td class="px-5 py-4 text-sm">${chip(result.phone)}</td>
+        <td class="px-5 py-4 text-sm text-on-surface-variant min-w-64">${result.address ? escapeHtml(result.address) : '-'}</td>
+        <td class="px-5 py-4 text-sm">
+          ${result.website ? `<a href="${safeWebsite}" target="_blank" rel="noopener noreferrer" class="text-white hover:underline">${escapeHtml(compactUrl(result.website))}</a>` : '<span class="text-on-surface-variant">-</span>'}
+        </td>
+        <td class="px-5 py-4 text-sm text-on-surface-variant">${result.socials.length > 0 ? escapeHtml(result.socials.map(compactUrl).join(', ')) : '-'}</td>
+        <td class="px-5 py-4 text-sm text-on-surface-variant min-w-64">${formatQuotesHtml(result.quotes)}</td>
+        <td class="px-5 py-4 text-sm text-on-surface">${formatConfidence(result.confidence)}</td>
+        <td class="px-5 py-4 text-sm">
+          <span class="inline-block px-3 py-1 rounded-full text-xs font-semibold ${statusClass(result.status)}">
+            ${escapeHtml(result.status || 'pending')}
+          </span>
+        </td>
+      `;
+      resultsTableBody.appendChild(row);
+    });
+  }
+
+  function flattenResults(results: ScrapeResult[]): TableRow[] {
+    return results.flatMap(result => {
+      const sourceUrl = result.source_url || result.url || '';
+      const companies = result.companies && result.companies.length > 0
+        ? result.companies
+        : [{
+            company_name: result.company_name,
+            emails: result.emails || [],
+            phone_numbers: result.phone_numbers || [],
+            addresses: result.addresses || [],
+            source_url: sourceUrl
+          }];
+
+      return companies.map(company => {
+        const listingName = company.listing_name || company.business_name || company.company_name || '';
+        return {
+          sourceUrl: company.source_url || sourceUrl,
+          listingName,
+          email: company.email || (company.emails || [])[0] || '',
+          phone: company.phone || (company.phone_numbers || [])[0] || '',
+          address: company.address || (company.addresses || [])[0] || '',
+          website: company.website || '',
+          socials: company.socials || [],
+          quotes: matchQuotesToCompany(result.quotes || [], listingName, companies.length),
+          confidence: company.confidence,
+          status: result.status || 'pending'
+        };
+      });
+    });
+  }
+
+  function matchQuotesToCompany(quotes: QuoteResult[], listingName: string, companyCount: number): QuoteResult[] {
+    if (companyCount === 1) {
+      return quotes;
+    }
+    const normalizedName = listingName.toLowerCase();
+    return quotes.filter(quote => {
+      const quoteCompany = (quote.company || '').toLowerCase();
+      return quoteCompany && (quoteCompany === normalizedName || normalizedName.includes(quoteCompany) || quoteCompany.includes(normalizedName));
+    });
+  }
+
+  function setLoading(isLoading: boolean): void {
+    startScrapingBtn.disabled = isLoading;
+    startScrapingBtn.style.opacity = isLoading ? '0.6' : '1';
+    document.getElementById('btnText')!.textContent = isLoading ? 'Scraping...' : 'Start Scraping';
+    document.getElementById('loadingSpinner')!.classList.toggle('hidden', !isLoading);
+  }
+
   function isValidUrl(url: string): boolean {
     try {
       new URL(url);
@@ -242,90 +347,71 @@
     }
   }
 
-  function updateResultsTable(): void {
-    resultsTableBody.innerHTML = '';
-    
-    if (scrapeResults.length === 0) {
-      emptyState.classList.remove('hidden');
-      return;
+  function chip(value: string): string {
+    return value
+      ? `<span class="px-2 py-1 rounded bg-white/10 border border-white/10 text-on-surface text-xs font-code-sm">${escapeHtml(value)}</span>`
+      : '<span class="text-on-surface-variant">-</span>';
+  }
+
+  function statusClass(status: string): string {
+    if (status === 'success') {
+      return 'bg-white/15 text-white border border-white/20';
     }
+    if (status === 'error') {
+      return 'bg-white/5 text-white/60 border border-white/10';
+    }
+    return 'bg-white/10 text-white/80 border border-white/15';
+  }
 
-    emptyState.classList.add('hidden');
+  function formatQuotes(quotes: QuoteResult[]): string {
+    return quotes
+      .map(quote => [quote.title, quote.price, quote.currency].filter(Boolean).join(' '))
+      .filter(Boolean)
+      .join('; ');
+  }
 
-    scrapeResults.forEach((result, index) => {
-      const row = document.createElement('tr');
-      row.className = 'border-b border-outline-variant hover:bg-surface-container-low transition-colors';
-      row.style.animation = `fadeInUp 0.5s ease-out ${index * 0.05}s both`;
-      
-      const safeUrl = sanitizeExternalUrl(result.url);
-      row.innerHTML = `
-        <td class="px-6 py-4 text-sm text-on-surface-variant truncate max-w-xs">
-          <a href="${safeUrl}" target="_blank" rel="noopener noreferrer" class="hover:text-primary transition-colors">
-            ${escapeHtml(result.url)}
-          </a>
-        </td>
-        <td class="px-6 py-4 text-sm text-on-surface">${escapeHtml(result.company_name || '-')}</td>
-        <td class="px-6 py-4 text-sm">
-          <div class="flex flex-wrap gap-2">
-            ${result.emails && result.emails.length > 0 
-              ? result.emails.map(email => `
-                <span class="px-2 py-1 rounded bg-surface-container-low text-on-surface text-xs font-code-sm">
-                  ${escapeHtml(email)}
-                </span>
-              `).join('')
-              : '<span class="text-on-surface-variant">-</span>'
-            }
-          </div>
-        </td>
-        <td class="px-6 py-4 text-sm">
-          <div class="flex flex-wrap gap-2">
-            ${result.phone_numbers && result.phone_numbers.length > 0
-              ? result.phone_numbers.map(phone => `
-                <span class="px-2 py-1 rounded bg-surface-container-low text-on-surface text-xs font-code-sm">
-                  ${escapeHtml(phone)}
-                </span>
-              `).join('')
-              : '<span class="text-on-surface-variant">-</span>'
-            }
-          </div>
-        </td>
-        <td class="px-6 py-4 text-sm text-on-surface-variant">${result.addresses && result.addresses.length > 0 ? escapeHtml(result.addresses.join(', ')) : '-'}</td>
-        <td class="px-6 py-4 text-sm">
-          <span class="inline-block px-3 py-1 rounded-full text-xs font-semibold ${
-            result.status === 'success' 
-              ? 'bg-green-500/20 text-green-300' 
-              : result.status === 'error'
-              ? 'bg-red-500/20 text-red-300'
-              : 'bg-yellow-500/20 text-yellow-300'
-          }">
-            ${result.status || 'pending'}
-          </span>
-        </td>
-      `;
-      
-      resultsTableBody.appendChild(row);
-    });
+  function formatQuotesHtml(quotes: QuoteResult[]): string {
+    if (quotes.length === 0) {
+      return '-';
+    }
+    return quotes.map(quote => `
+      <div class="mb-2 last:mb-0">
+        <span class="font-semibold text-on-surface">${escapeHtml(quote.title || 'Quote')}</span>
+        <span class="text-white">${escapeHtml(quote.price || '')}</span>
+        ${quote.currency ? `<span>${escapeHtml(quote.currency)}</span>` : ''}
+      </div>
+    `).join('');
+  }
+
+  function formatConfidence(confidence?: number): string {
+    return typeof confidence === 'number' ? `${Math.round(confidence * 100)}%` : 'N/A';
+  }
+
+  function compactUrl(url: string): string {
+    try {
+      const parsed = new URL(url);
+      return parsed.hostname.replace(/^www\./, '');
+    } catch {
+      return url;
+    }
   }
 
   function showNotification(message: string, type: 'success' | 'error' | 'info' = 'info'): void {
     const notification = document.createElement('div');
     notification.className = `glass rounded-lg p-4 animate-fade-in-up ${
-      type === 'success' ? 'border-l-4 border-green-500' :
-      type === 'error' ? 'border-l-4 border-error' :
-      'border-l-4 border-secondary'
+      type === 'success' ? 'border-l-4 border-white' :
+      type === 'error' ? 'border-l-4 border-white/50' :
+      'border-l-4 border-white/70'
     }`;
-    
+
     notification.innerHTML = `
       <div class="flex items-center gap-3">
-        <span class="text-lg">
-          ${type === 'success' ? '✓' : type === 'error' ? '✕' : 'ℹ'}
-        </span>
+        <span class="text-xs font-bold uppercase tracking-[0.2em]">${type === 'success' ? 'OK' : type === 'error' ? 'ERR' : 'INFO'}</span>
         <span class="text-on-surface">${escapeHtml(message)}</span>
       </div>
     `;
-    
+
     notificationsContainer.appendChild(notification);
-    
     setTimeout(() => {
       notification.style.animation = 'fadeOut 0.5s ease-out forwards';
       setTimeout(() => notification.remove(), 500);
@@ -373,3 +459,4 @@
     }
   }
 </style>
+

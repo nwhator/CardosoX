@@ -33,7 +33,7 @@ def format_response(status: str, results: list[dict] | None = None, message: str
 
 
 def create_csv_header() -> str:
-    return "Source URL,Company Name,Email,Phone,Address,Website,Socials,Confidence,Status"
+    return "Source URL,Company Name,Business Name,Listing Name,Email,Phone,Address,Website,Socials,Confidence,Status"
 
 
 def create_csv_row(data: dict) -> str:
@@ -49,6 +49,8 @@ def create_csv_row(data: dict) -> str:
         [
             escape_csv(data.get("source_url") or data.get("url")),
             escape_csv(data.get("company_name")),
+            escape_csv(data.get("business_name")),
+            escape_csv(data.get("listing_name")),
             escape_csv(data.get("email")),
             escape_csv(data.get("phone")),
             escape_csv(data.get("address")),
@@ -58,4 +60,3 @@ def create_csv_row(data: dict) -> str:
             escape_csv(data.get("status")),
         ]
     )
-

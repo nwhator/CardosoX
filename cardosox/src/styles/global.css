@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Geist:wght@400;600;700;900&family=JetBrains+Mono:wght@400&family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Geist:wght@400;600;700;900&family=JetBrains+Mono:wght@400&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -15,29 +15,33 @@ html {
 }
 
 body {
-  background: linear-gradient(135deg, #131313 0%, #1a1a2e 50%, #131313 100%);
-  color: #e5e2e1;
+  background:
+    radial-gradient(circle at 15% 10%, rgba(255, 255, 255, 0.16), transparent 28%),
+    radial-gradient(circle at 85% 0%, rgba(255, 255, 255, 0.1), transparent 24%),
+    linear-gradient(135deg, #050505 0%, #111111 48%, #000000 100%);
+  color: #f5f5f5;
   font-family: 'Geist', sans-serif;
   min-height: 100vh;
 }
 
 /* Glass morphism effect */
 .glass {
-  background: rgba(19, 19, 19, 0.7);
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(203, 195, 215, 0.1);
-  border-radius: 12px;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.045));
+  backdrop-filter: blur(18px) saturate(140%);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 18px;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.18);
 }
 
 .glass-sm {
-  background: rgba(19, 19, 19, 0.5);
-  backdrop-filter: blur(8px);
-  border: 1px solid rgba(203, 195, 215, 0.08);
+  background: rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(14px);
+  border: 1px solid rgba(255, 255, 255, 0.14);
 }
 
 /* Gradient text */
 .gradient-text {
-  background: linear-gradient(135deg, #d0bcff 0%, #a078ff 50%, #ffb869 100%);
+  background: linear-gradient(135deg, #ffffff 0%, #bdbdbd 55%, #ffffff 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -55,32 +59,34 @@ body {
 
 .hover-lift:hover {
   transform: translateY(-4px);
-  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 28px 70px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.22);
 }
 
 /* Button styles */
 .btn-primary {
   @apply px-6 py-3 rounded-lg font-semibold;
-  background: linear-gradient(135deg, #d0bcff 0%, #a078ff 100%);
-  color: #3c0091;
+  background: #ffffff;
+  color: #050505;
+  border: 1px solid rgba(255, 255, 255, 0.9);
   transition: all 0.3s ease;
 }
 
 .btn-primary:hover {
   transform: translateY(-2px);
-  box-shadow: 0 8px 16px rgba(160, 120, 255, 0.4);
+  box-shadow: 0 14px 32px rgba(255, 255, 255, 0.18);
+  background: #ededed;
 }
 
 .btn-secondary {
   @apply px-6 py-3 rounded-lg font-semibold;
-  background: rgba(173, 198, 255, 0.1);
-  color: #adc6ff;
-  border: 1px solid #adc6ff;
+  background: rgba(255, 255, 255, 0.06);
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.32);
   transition: all 0.3s ease;
 }
 
 .btn-secondary:hover {
-  background: rgba(173, 198, 255, 0.2);
+  background: rgba(255, 255, 255, 0.14);
   transform: translateY(-2px);
 }
 
@@ -107,27 +113,27 @@ body {
 }
 
 ::-webkit-scrollbar-track {
-  background: #0e0e0e;
+  background: #050505;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #494454;
+  background: #555555;
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #595059;
+  background: #777777;
 }
 
 /* Text selection */
 ::selection {
-  background: #a078ff;
-  color: #131313;
+  background: #ffffff;
+  color: #000000;
 }
 
 /* Focus states */
 :focus-visible {
-  outline: 2px solid #d0bcff;
+  outline: 2px solid #ffffff;
   outline-offset: 2px;
 }
 

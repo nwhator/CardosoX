@@ -11,6 +11,8 @@ class CsvExporter:
     fieldnames = [
         "source_url",
         "company_name",
+        "business_name",
+        "listing_name",
         "email",
         "phone",
         "address",
@@ -33,6 +35,8 @@ class CsvExporter:
                     {
                         "source_url": company.get("source_url") or result.get("source_url"),
                         "company_name": company.get("company_name"),
+                        "business_name": company.get("business_name"),
+                        "listing_name": company.get("listing_name"),
                         "email": company.get("email"),
                         "phone": company.get("phone"),
                         "address": company.get("address"),
@@ -56,4 +60,3 @@ class CsvExporter:
 
     def save(self, results: list[dict], path: str | Path) -> None:
         Path(path).write_text(self.dumps(results), encoding="utf-8", newline="")
-
