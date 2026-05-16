@@ -121,12 +121,12 @@ Response:
 
 ## Features
 
-- Discovery crawler that only collects likely company/profile/about/contact/pricing URLs
+- AI-guided discovery that prioritizes contact, about, pricing, team, company, and profile URLs
 - Deep crawler with Playwright rendering, network-idle waits, scrolling, worker queue, and image/font blocking
-- Entity-aware DOM block extraction to reduce cross-company email/phone/address mixing
+- Entity-aware DOM block extraction with per-container GROQ resolution to reduce cross-company email/phone/address mixing
 - Email extraction from mailto, regex fallback, base64 text, common obfuscations, and Cloudflare email protection
 - Phone extraction from tel links, WhatsApp links, and international formats with E.164 normalization when possible
-- Address, website, social, pricing, package, fee, and quote extraction
+- Address, website, social, pricing, package, fee, and quote extraction attached to DOM containers
 - Confidence scoring and low-confidence match logging
 - JSON and CSV exporters
 - Production-oriented request headers and browser resource blocking
@@ -142,12 +142,27 @@ Create `.env` file:
 FLASK_ENV=development
 FLASK_DEBUG=True
 API_PORT=5000
-SCRAPER_TIMEOUT=30
+GROQ_API_KEY=
+GROQ_MODEL=llama-3.3-70b-versatile
+GROQ_FALLBACK_MODEL=llama-3.1-8b-instant
+
+PLAYWRIGHT_TIMEOUT=30000
+MAX_CONCURRENT_PAGES=5
+MAX_CRAWL_DEPTH=3
 MAX_RETRIES=3
-SCRAPER_WORKERS=3
 MAX_DISCOVERY_LINKS=150
 MAX_CRAWL_PAGES=150
-CRAWL_DEPTH=2
 PHONE_DEFAULT_REGION=NG
-PARTIAL_SAVE_DIR=
+
+ENABLE_AI_MATCHING=true
+ENABLE_QUOTE_CRAWLER=true
+
+OUTPUT_DIR=./exports
+CACHE_DIR=./cache
+LOG_LEVEL=INFO
+
+CSV_EXPORT=true
+JSON_EXPORT=true
 ```
+
+`SCRAPER_TIMEOUT`, `SCRAPER_WORKERS`, and `CRAWL_DEPTH` are still accepted as legacy fallbacks, but new deployments should use the keys above.

@@ -24,6 +24,12 @@ def entity_confidence(entity: dict, signals: dict | None = None) -> float:
         score += 0.07
     if signals.get("same_dom_block"):
         score += 0.18
+    if signals.get("header_proximity"):
+        score += 0.04
+    if signals.get("semantic_similarity"):
+        score += 0.06
+    if signals.get("ai_confidence"):
+        score += min(0.16, float(signals["ai_confidence"]) * 0.16)
     if signals.get("structured_data"):
         score += 0.08
     if signals.get("fallback_page"):
@@ -49,4 +55,3 @@ def quote_confidence(quote: dict, signals: dict | None = None) -> float:
     if signals.get("starting_from"):
         score += 0.05
     return clamp_score(score)
-

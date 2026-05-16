@@ -50,7 +50,22 @@ class QuoteExtractor:
                 quotes.append(quote)
         return self._dedupe(quotes)
 
-    def _find_quote_containers(self, soup: BeautifulSoup) -> list[Tag]:
+    def extract_from_blocks(self, blocks: list[Tag], source_url: str) -> list[dict]:
+        quotes: list[dict] = []
+        for block in blocks:
+            containers = self._find_quote_containers(block)
+            if not containers and PRICE_RE.search(clean_text(block.get_text(" "))):
+                containers = [block]
+            company = self._extract_company_hint(block)
+            for container in containers:
+                quote = self._extract_from_container(container, source_url)
+                if quote:
+                    quote["company"] = company
+                    quote["extraction_scope"] = "dom_block"
+                    quotes.append(quote)
+        return self._dedupe(quotes)
+
+    def _find_quote_containers(self, soup: BeautifulSoup | Tag) -> list[Tag]:
         page_text_len = len(clean_text(soup.get_text(" ")))
         containers: list[Tag] = []
         for selector in QUOTE_CONTAINER_SELECTORS:
@@ -61,8 +76,6 @@ class QuoteExtractor:
                 if page_text_len and len(text) / page_text_len > 0.75:
                     continue
                 containers.append(node)
-        if not containers and PRICE_RE.search(clean_text(soup.get_text(" "))):
-            containers.append(soup.body or soup)
         return self._dedupe_nodes(containers)[:80]
 
     def _extract_from_container(self, node: Tag, source_url: str) -> dict | None:
@@ -81,6 +94,7 @@ class QuoteExtractor:
             "currency": currency,
             "description": self._extract_description(text, title, price),
             "source_url": source_url,
+            "extraction_scope": "pricing_container",
             "confidence": 0.0,
         }
         quote["confidence"] = quote_confidence(
@@ -106,6 +120,25 @@ class QuoteExtractor:
         description = text.replace(title, "", 1).replace(price, "", 1)
         return clean_text(description, 300)
 
+    def _extract_company_hint(self, node: Tag) -> str:
+        for selector in (
+            '[itemprop="name"]',
+            ".company-name",
+            ".business-name",
+            ".profile-name",
+            "h1",
+            "h2",
+            "h3",
+            "h4",
+            "strong",
+        ):
+            item = node.select_one(selector)
+            if item:
+                value = clean_text(item.get_text(" "), 120)
+                if value and not PRICE_RE.search(value):
+                    return value
+        return ""
+
     def _dedupe_nodes(self, nodes: list[Tag]) -> list[Tag]:
         output: list[Tag] = []
         for node in nodes:
@@ -127,4 +160,3 @@ class QuoteExtractor:
             )
             output.append(match)
         return output
-

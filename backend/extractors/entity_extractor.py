@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+from typing import Any
 from urllib.parse import urlparse
 
 from bs4 import BeautifulSoup, Tag
@@ -54,21 +55,26 @@ CONTAINER_SELECTORS = "main, body, section, article, ul, ol, table, [class*='lis
 
 
 class EntityExtractor:
-    def __init__(self, default_region: str = "NG"):
+    def __init__(self, default_region: str = "NG", ai_client: Any | None = None):
         self.email_extractor = EmailExtractor()
         self.phone_extractor = PhoneExtractor(default_region=default_region)
         self.address_extractor = AddressExtractor()
         self.matcher = EntityMatcher()
+        self.ai_client = ai_client
+        self.last_ai_quotes: list[dict] = []
+        self.last_blocks: list[Tag] = []
 
     def extract(self, html: str, source_url: str) -> list[dict]:
         soup = BeautifulSoup(html, "lxml")
+        self.last_ai_quotes = []
         blocks = self.detect_company_blocks(soup)
         if not blocks:
-            blocks = [soup.body or soup]
+            blocks = self._detect_semantic_sections(soup)
+        self.last_blocks = blocks
 
         entities: list[dict] = []
         for block in blocks:
-            entity = self._extract_from_block(block, source_url, fallback_page=block is (soup.body or soup))
+            entity = self._extract_from_block(block, source_url, fallback_page=False)
             if self._is_useful_entity(entity):
                 entities.append(entity)
 
@@ -111,6 +117,40 @@ class EntityExtractor:
             if len(viable_children) >= 2:
                 repeated_blocks.extend(viable_children)
         return repeated_blocks
+
+    def _detect_semantic_sections(self, soup: BeautifulSoup) -> list[Tag]:
+        """Use page sections as bounded fallback containers, never the full body."""
+        candidates: list[Tag] = []
+        selectors = [
+            "[class*='contact']",
+            "[class*='about']",
+            "[class*='profile']",
+            "[class*='company']",
+            "[class*='business']",
+            "[class*='pricing']",
+            "[class*='package']",
+            "[id*='contact']",
+            "[id*='about']",
+            "[id*='profile']",
+            "[id*='pricing']",
+            "address",
+            "article",
+            "section",
+            "main > div",
+        ]
+        page_text_len = len(clean_text(soup.get_text(" ")))
+        for selector in selectors:
+            for node in soup.select(selector):
+                if not isinstance(node, Tag):
+                    continue
+                text = clean_text(node.get_text(" "))
+                if len(text) < 20:
+                    continue
+                if page_text_len and len(text) / page_text_len > 0.65:
+                    continue
+                if self._block_signal_count(node) >= 1:
+                    candidates.append(node)
+        return self._dedupe_nested_blocks(candidates)[:40]
 
     def _looks_like_listing_child(self, node: Tag) -> bool:
         text = clean_text(node.get_text(" "))
@@ -164,11 +204,13 @@ class EntityExtractor:
             "email": emails[0] if emails else None,
             "emails": emails,
             "phone": phones[0] if phones else None,
+            "phones": phones,
             "phone_numbers": phones,
             "address": addresses[0] if addresses else None,
             "addresses": addresses,
             "website": website or None,
             "socials": socials,
+            "social_links": socials,
             "source_url": source_url,
             "extraction_scope": "page_fallback" if fallback_page else "dom_block",
         }
@@ -179,7 +221,103 @@ class EntityExtractor:
                 "fallback_page": fallback_page,
             },
         )
+        self._apply_ai_resolution(entity, block, source_url)
         return entity
+
+    def _apply_ai_resolution(self, entity: dict, block: BeautifulSoup | Tag, source_url: str) -> None:
+        if not self.ai_client:
+            return
+        payload = self._build_ai_payload(block, source_url, entity)
+        resolved = self.ai_client.resolve_container(payload)
+        if not resolved:
+            return
+        for quote in resolved.get("quotes", []):
+            quote["company"] = resolved.get("company_name") or entity.get("company_name") or quote.get("company", "")
+            quote["source_url"] = source_url
+            self.last_ai_quotes.append(quote)
+
+        ai_confidence = float(resolved.get("confidence", 0) or 0)
+        if resolved.get("company_name") and (ai_confidence >= 0.35 or not entity.get("company_name")):
+            entity["company_name"] = resolved["company_name"]
+            entity["business_name"] = resolved["company_name"]
+            entity["listing_name"] = resolved["company_name"]
+        emails = unique_keep_order([*entity.get("emails", []), *resolved.get("emails", [])])
+        phones = unique_keep_order([*entity.get("phone_numbers", []), *(self.phone_extractor.normalize(phone) for phone in resolved.get("phones", []))])
+        addresses = unique_keep_order([*entity.get("addresses", []), resolved.get("address", "")])
+        socials = unique_keep_order([*entity.get("socials", []), *resolved.get("social_links", [])])
+
+        entity["emails"] = emails
+        entity["email"] = emails[0] if emails else entity.get("email")
+        entity["phone_numbers"] = [phone for phone in phones if phone]
+        entity["phones"] = entity["phone_numbers"]
+        entity["phone"] = entity["phone_numbers"][0] if entity["phone_numbers"] else entity.get("phone")
+        entity["addresses"] = [address for address in addresses if address]
+        entity["address"] = entity["addresses"][0] if entity["addresses"] else entity.get("address")
+        if resolved.get("website"):
+            entity["website"] = resolved["website"]
+        entity["socials"] = socials
+        entity["social_links"] = socials
+        entity["ai_confidence"] = ai_confidence
+        entity["page_type"] = resolved.get("page_type")
+        entity["confidence"] = entity_confidence(
+            entity,
+            {
+                "same_dom_block": True,
+                "ai_confidence": ai_confidence,
+                "semantic_similarity": ai_confidence >= 0.6,
+                "header_proximity": bool(payload.get("heading")),
+            },
+        )
+        entity["confidence"] = max(entity["confidence"], round((entity["confidence"] * 0.65) + (ai_confidence * 0.35), 3))
+
+    def _build_ai_payload(self, block: BeautifulSoup | Tag, source_url: str, entity: dict) -> dict:
+        heading = ""
+        for selector in ("h1", "h2", "h3", "h4", ".title", "[class*='heading']"):
+            item = block.select_one(selector) if isinstance(block, Tag) else None
+            if item:
+                heading = clean_text(item.get_text(" "), 120)
+                break
+        links = []
+        for link in block.select("a[href]") if isinstance(block, Tag) else []:
+            links.append({"text": clean_text(link.get_text(" "), 80), "href": normalize_url(link.get("href", ""), source_url)})
+        return {
+            "source_url": source_url,
+            "container_path": self._container_path(block),
+            "heading": heading,
+            "text": clean_text(block.get_text(" ") if isinstance(block, Tag) else block.get_text(" "), 2200),
+            "links": links,
+            "traditional": {
+                "company_name": entity.get("company_name"),
+                "emails": entity.get("emails", []),
+                "phones": entity.get("phone_numbers", []),
+                "addresses": entity.get("addresses", []),
+                "website": entity.get("website"),
+                "social_links": entity.get("socials", []),
+                "confidence": entity.get("confidence"),
+            },
+            "dom_signals": {
+                "signal_count": self._block_signal_count(block) if isinstance(block, Tag) else 0,
+                "same_dom_block": True,
+                "header_proximity": bool(heading),
+            },
+        }
+
+    def _container_path(self, block: BeautifulSoup | Tag) -> str:
+        if not isinstance(block, Tag):
+            return ""
+        parts = []
+        node: Tag | None = block
+        while isinstance(node, Tag) and node.name not in {"[document]", "html"} and len(parts) < 6:
+            label = node.name
+            node_id = node.get("id")
+            classes = node.get("class") or []
+            if node_id:
+                label += f"#{node_id}"
+            elif classes:
+                label += "." + ".".join(str(item) for item in classes[:2])
+            parts.append(label)
+            node = node.parent if isinstance(node.parent, Tag) else None
+        return " > ".join(reversed(parts))
 
     def _extract_name(self, node: BeautifulSoup | Tag) -> str:
         selectors = [
@@ -296,11 +434,13 @@ class EntityExtractor:
                         "email": clean_text(node.get("email")).lower() or None,
                         "emails": [clean_text(node.get("email")).lower()] if node.get("email") else [],
                         "phone": self.phone_extractor.normalize(str(node.get("telephone", ""))) or None,
+                        "phones": [self.phone_extractor.normalize(str(node.get("telephone", "")))] if node.get("telephone") else [],
                         "phone_numbers": [self.phone_extractor.normalize(str(node.get("telephone", "")))] if node.get("telephone") else [],
                         "address": clean_text(str(address), 240) or None,
                         "addresses": [clean_text(str(address), 240)] if address else [],
                         "website": normalize_url(str(node.get("url", "")), source_url) or None,
                         "socials": [],
+                        "social_links": [],
                         "source_url": source_url,
                         "extraction_scope": "structured_data",
                     }

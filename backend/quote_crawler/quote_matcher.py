@@ -11,10 +11,12 @@ class QuoteMatcher:
             return quotes
         if len(companies) == 1:
             for quote in quotes:
-                quote["company"] = companies[0].get("company_name", "")
+                quote["company"] = quote.get("company") or companies[0].get("company_name", "")
             return quotes
 
         for quote in quotes:
+            if quote.get("company"):
+                continue
             quote_text = " ".join(str(quote.get(key, "")) for key in ("title", "description")).lower()
             best_company = ""
             best_score = 0.0
@@ -28,4 +30,3 @@ class QuoteMatcher:
                     best_company = name
             quote["company"] = best_company if best_score >= 0.35 else ""
         return quotes
-

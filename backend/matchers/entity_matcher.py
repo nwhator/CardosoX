@@ -72,7 +72,9 @@ class EntityMatcher:
             target["extraction_scope"] = source["extraction_scope"]
 
         target["emails"] = unique_keep_order([*(target.get("emails") or []), *(source.get("emails") or [])])
-        target["phone_numbers"] = unique_keep_order([*(target.get("phone_numbers") or []), *(source.get("phone_numbers") or [])])
+        target["phone_numbers"] = unique_keep_order([*(target.get("phone_numbers") or []), *(source.get("phone_numbers") or source.get("phones") or [])])
+        target["phones"] = target["phone_numbers"]
         target["addresses"] = unique_keep_order([*(target.get("addresses") or []), *(source.get("addresses") or [])])
-        target["socials"] = unique_keep_order([*(target.get("socials") or []), *(source.get("socials") or [])])
+        target["socials"] = unique_keep_order([*(target.get("socials") or []), *(source.get("socials") or source.get("social_links") or [])])
+        target["social_links"] = target["socials"]
         target["confidence"] = clamp_score(max(target.get("confidence", 0), source.get("confidence", 0)) + 0.05)

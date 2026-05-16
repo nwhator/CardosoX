@@ -19,6 +19,29 @@ NOISE_EMAIL_PARTS = (
     "youremail",
     "name@",
 )
+NOISE_ENTITY_NAMES = {
+    "home",
+    "about",
+    "about us",
+    "contact",
+    "contact us",
+    "services",
+    "pricing",
+    "login",
+    "sign in",
+    "vendors",
+    "businesses",
+    "companies",
+    "directory",
+    "categories",
+    "featured",
+    "popular",
+    "recommended",
+    "search results",
+    "view profile",
+    "read more",
+    "learn more",
+}
 
 
 def is_valid_email(email: str | None) -> bool:
@@ -87,5 +110,8 @@ def has_real_entity_name(name: str | None) -> bool:
     normalized = name.strip().lower()
     if len(normalized) < 2:
         return False
-    return normalized not in {"home", "about", "contact", "services", "pricing", "login", "sign in"}
-
+    if normalized in NOISE_ENTITY_NAMES:
+        return False
+    if normalized.startswith(("best ", "top ")) and any(term in normalized for term in ("vendors", "companies", "businesses", "services")):
+        return False
+    return True

@@ -13,13 +13,14 @@ import logging
 from scraper import WebScraper
 from utils import validate_urls
 
+load_dotenv()
+
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO,
+    level=getattr(logging, os.getenv('LOG_LEVEL', 'INFO').upper(), logging.INFO),
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
-load_dotenv()
 
 # Initialize Flask app
 app = Flask(__name__)

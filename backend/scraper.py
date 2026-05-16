@@ -10,11 +10,13 @@ from typing import Any
 
 import requests
 
+from ai.groq_client import GroqClient
 from crawler.deep_crawler import DeepCrawler
 from crawler.discovery_crawler import DiscoveryCrawler
 from crawler.queue_manager import QueueManager
 from exporters.csv_exporter import CsvExporter
 from exporters.json_exporter import JsonExporter
+from extractors.entity_extractor import EntityExtractor
 from matchers.entity_matcher import EntityMatcher
 from utils.cleaners import unique_keep_order
 
@@ -35,15 +37,20 @@ class WebScraper:
 
     def __init__(self):
         self.max_retries = int(os.getenv("MAX_RETRIES", "3"))
-        self.timeout = int(os.getenv("SCRAPER_TIMEOUT", "30"))
-        self.concurrency = int(os.getenv("SCRAPER_WORKERS", "3"))
+        playwright_timeout_ms = int(os.getenv("PLAYWRIGHT_TIMEOUT", str(int(os.getenv("SCRAPER_TIMEOUT", "30")) * 1000)))
+        self.timeout = max(1, playwright_timeout_ms // 1000)
+        self.concurrency = int(os.getenv("MAX_CONCURRENT_PAGES", os.getenv("SCRAPER_WORKERS", "5")))
         self.max_discovery_links = int(os.getenv("MAX_DISCOVERY_LINKS", os.getenv("MAX_CRAWL_PAGES", "150")))
         self.max_crawl_pages = int(os.getenv("MAX_CRAWL_PAGES", str(self.max_discovery_links)))
-        self.crawl_depth = int(os.getenv("CRAWL_DEPTH", "2"))
+        self.crawl_depth = int(os.getenv("MAX_CRAWL_DEPTH", os.getenv("CRAWL_DEPTH", "3")))
         self.default_region = os.getenv("PHONE_DEFAULT_REGION", "NG")
-        self.partial_save_dir = os.getenv("PARTIAL_SAVE_DIR", "").strip()
+        self.output_dir = Path(os.getenv("OUTPUT_DIR", "./exports"))
+        self.partial_save_dir = os.getenv("PARTIAL_SAVE_DIR", str(self.output_dir / "partials")).strip()
+        self.csv_export_enabled = os.getenv("CSV_EXPORT", "true").lower() == "true"
+        self.json_export_enabled = os.getenv("JSON_EXPORT", "true").lower() == "true"
 
         self.cs = cloudscraper.create_scraper() if cloudscraper else requests.Session()
+        self.ai_client = GroqClient()
         self.discovery = DiscoveryCrawler(
             timeout_ms=self.timeout * 1000,
             max_links_per_seed=self.max_discovery_links,
@@ -52,6 +59,7 @@ class WebScraper:
             timeout_ms=self.timeout * 1000,
             retries=self.max_retries,
             default_region=self.default_region,
+            ai_client=self.ai_client,
         )
         self.entity_matcher = EntityMatcher()
         self.csv_exporter = CsvExporter()
@@ -114,6 +122,7 @@ class WebScraper:
 
     async def _crawl_seed(self, browser: Any, seed_url: str) -> dict[str, Any]:
         discovered_urls = await self.discovery.discover(browser, seed_url)
+        discovered_urls = await asyncio.to_thread(self.deep._rank_discovered_links, discovered_urls)
         queue = QueueManager()
         for url in discovered_urls:
             if len(queue.visited) >= self.max_crawl_pages:
@@ -143,7 +152,9 @@ class WebScraper:
             task.cancel()
         await asyncio.gather(*workers, return_exceptions=True)
 
-        return self._aggregate_seed_result(seed_url, discovered_urls, page_results)
+        result = self._aggregate_seed_result(seed_url, discovered_urls, page_results)
+        self._save_exports(seed_url, result)
+        return result
 
     def _aggregate_seed_result(self, seed_url: str, discovered_urls: list[str], page_results: list[dict[str, Any]]) -> dict[str, Any]:
         companies = []
@@ -157,6 +168,9 @@ class WebScraper:
 
         companies = self.entity_matcher.merge_entities(companies)
         quotes = self._dedupe_quotes(quotes)
+        for company in companies:
+            if company.get("confidence", 0) < 0.45:
+                logger.info("Low-confidence company retained: %s source=%s", company.get("company_name"), company.get("source_url"))
 
         result = {
             "source_url": seed_url,
@@ -180,6 +194,7 @@ class WebScraper:
         result["phone_numbers"] = unique_keep_order(
             phone for company in result.get("companies", []) for phone in company.get("phone_numbers", [])
         )
+        result["phones"] = result["phone_numbers"]
         result["addresses"] = unique_keep_order(
             address for company in result.get("companies", []) for address in company.get("addresses", [])
         )
@@ -213,12 +228,30 @@ class WebScraper:
         except Exception as exc:
             logger.debug("Partial save failed for %s: %s", seed_url, exc)
 
+    def _save_exports(self, seed_url: str, result: dict[str, Any]) -> None:
+        if not self.csv_export_enabled and not self.json_export_enabled:
+            return
+        try:
+            safe_name = "".join(ch if ch.isalnum() else "_" for ch in seed_url)[:120]
+            self.output_dir.mkdir(parents=True, exist_ok=True)
+            if self.json_export_enabled:
+                self.json_exporter.save([result], self.output_dir / f"{safe_name}.json")
+            if self.csv_export_enabled:
+                self.csv_exporter.save([result], self.output_dir / f"{safe_name}.csv")
+        except Exception as exc:
+            logger.debug("Export save failed for %s: %s", seed_url, exc)
+
     def _scrape_with_cloudscraper(self, url: str) -> dict[str, Any]:
         try:
             response = self.cs.get(url, timeout=self.timeout)
             response.raise_for_status()
-            companies = self.deep.entity_extractor.extract(response.text, url)
-            quotes = self.deep.quote_extractor.extract(response.text, url)
+            entity_extractor = EntityExtractor(default_region=self.default_region, ai_client=self.ai_client)
+            companies = entity_extractor.extract(response.text, url)
+            quotes = [
+                *self.deep.quote_extractor.extract_from_blocks(entity_extractor.last_blocks, url),
+                *self.deep.quote_extractor.extract(response.text, url),
+                *entity_extractor.last_ai_quotes,
+            ]
             quotes = self.deep.quote_matcher.match(quotes, companies)
             result = {
                 "source_url": url,
