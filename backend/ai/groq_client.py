@@ -15,6 +15,8 @@ from pathlib import Path
 from typing import Any
 
 import requests
+from dotenv import load_dotenv
+from pathlib import Path
 
 from utils.cleaners import clean_text, normalize_url, unique_keep_order
 from utils.validators import has_real_entity_name, is_valid_email
@@ -63,10 +65,23 @@ Links:
 
 class GroqClient:
     def __init__(self) -> None:
+        # Attempt to load a backend .env file so running scripts from repo root
+        # picks up env vars placed in the backend directory.
+        try:
+            backend_dir = Path(__file__).resolve().parents[1]
+            dotenv_path = backend_dir / ".env"
+            load_dotenv(dotenv_path)
+        except Exception:
+            pass
+
         self.api_key = os.getenv("GROQ_API_KEY", "").strip()
         self.model = os.getenv("GROQ_MODEL", DEFAULT_MODEL).strip() or DEFAULT_MODEL
         self.fallback_model = os.getenv("GROQ_FALLBACK_MODEL", DEFAULT_FALLBACK_MODEL).strip() or DEFAULT_FALLBACK_MODEL
         self.enabled = os.getenv("ENABLE_AI_MATCHING", "true").lower() == "true" and bool(self.api_key)
+        if self.enabled:
+            logger.info("GROQ client enabled (model=%s).", self.model)
+        else:
+            logger.info("GROQ client disabled; GROQ_API_KEY present=%s.", bool(self.api_key))
         self.quote_enabled = os.getenv("ENABLE_QUOTE_CRAWLER", "true").lower() == "true"
         self.timeout = int(os.getenv("GROQ_TIMEOUT", "30"))
         self.max_retries = int(os.getenv("GROQ_RETRIES", "2"))
