@@ -228,8 +228,12 @@ class EntityExtractor:
     def _apply_ai_resolution(self, entity: dict, block: BeautifulSoup | Tag, source_url: str) -> None:
         if not self.ai_client:
             return
-        payload = self._build_ai_payload(block, source_url, entity)
-        resolved = self.ai_client.resolve_container(payload)
+        try:
+            payload = self._build_ai_payload(block, source_url, entity)
+            resolved = self.ai_client.resolve_container(payload)
+        except Exception as exc:
+            logger.debug("AI resolution failed, falling back to local extraction: %s", exc)
+            return
         if not resolved:
             return
         for quote in resolved.get("quotes", []):

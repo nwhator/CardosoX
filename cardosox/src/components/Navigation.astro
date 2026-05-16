@@ -33,10 +33,10 @@
 
 <script is:inline>
   const toggle = document.getElementById('theme-toggle');
-  const root = document.documentElement;
+  const htmlElement = document.documentElement;
 
   const syncTheme = () => {
-    const isLight = root.classList.contains('light');
+    const isLight = htmlElement.classList.contains('light');
     if (toggle) {
       toggle.setAttribute('aria-pressed', String(isLight));
     }
@@ -46,10 +46,10 @@
   syncTheme();
 
   toggle?.addEventListener('click', () => {
-    const nextTheme = root.classList.contains('light') ? 'dark' : 'light';
-    root.classList.toggle('light', nextTheme === 'light');
-    root.classList.toggle('dark', nextTheme !== 'light');
-    root.dataset.theme = nextTheme;
+    const nextTheme = htmlElement.classList.contains('light') ? 'dark' : 'light';
+    htmlElement.classList.toggle('light', nextTheme === 'light');
+    htmlElement.classList.toggle('dark', nextTheme !== 'light');
+    htmlElement.dataset.theme = nextTheme;
     syncTheme();
   });
 </script>
