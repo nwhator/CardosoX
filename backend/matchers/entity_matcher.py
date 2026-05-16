@@ -15,6 +15,8 @@ class EntityMatcher:
         return SequenceMatcher(None, left.lower(), right.lower()).ratio()
 
     def should_merge(self, left: dict, right: dict) -> bool:
+        if self._preserve_same_page_listings(left, right):
+            return False
         if left.get("email") and right.get("email") and left["email"] == right["email"]:
             return True
         if left.get("phone") and right.get("phone") and left["phone"] == right["phone"]:
@@ -31,6 +33,19 @@ class EntityMatcher:
         if same_website and name_similarity >= 0.72:
             return True
         if name_similarity >= 0.94 and self._one_side_is_sparse(left, right):
+            return True
+        return False
+
+    def _preserve_same_page_listings(self, left: dict, right: dict) -> bool:
+        left_path = str(left.get("container_path") or "").strip()
+        right_path = str(right.get("container_path") or "").strip()
+        if not left_path or not right_path:
+            return False
+        if left.get("source_url") != right.get("source_url"):
+            return False
+        left_scope = left.get("extraction_scope")
+        right_scope = right.get("extraction_scope")
+        if left_scope == right_scope == "dom_block" and left_path != right_path:
             return True
         return False
 

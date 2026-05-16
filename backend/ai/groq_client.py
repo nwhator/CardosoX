@@ -89,7 +89,11 @@ class GroqClient:
             user_prompt=ENTITY_USER_PROMPT.format(payload=json.dumps(compact, ensure_ascii=False)),
             cache_key=cache_key,
         )
+        # Validate the model output is a dict before attempting normalization.
         if response is None:
+            return None
+        if not isinstance(response, dict):
+            logger.warning("GROQ returned non-dict response for %s: %r", cache_key, response)
             return None
         normalized = self._normalize_entity_response(response, payload.get("source_url", ""))
         self._write_cache(cache_key, normalized)
@@ -156,7 +160,11 @@ class GroqClient:
                         continue
                     response.raise_for_status()
                     content = response.json()["choices"][0]["message"]["content"]
-                    return json.loads(content)
+                    try:
+                        return json.loads(content)
+                    except Exception:
+                        logger.warning("Failed to parse GROQ model output as JSON; raw content: %s", content)
+                        return None
                 except Exception as exc:
                     if attempt < self.max_retries:
                         time.sleep(2**attempt)

@@ -50,6 +50,22 @@ class WebScraper:
         self.json_export_enabled = os.getenv("JSON_EXPORT", "true").lower() == "true"
 
         self.cs = cloudscraper.create_scraper() if cloudscraper else requests.Session()
+        # Ensure non-cloudscraper sessions present a realistic browser User-Agent
+        try:
+            default_headers = {
+                "User-Agent": os.getenv(
+                    "SCRAPER_USER_AGENT",
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                ),
+                "Accept-Language": "en-US,en;q=0.9",
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            }
+            if hasattr(self.cs, "headers") and isinstance(self.cs.headers, dict):
+                # merge without overwriting any existing configured headers
+                for k, v in default_headers.items():
+                    self.cs.headers.setdefault(k, v)
+        except Exception:
+            pass
         self.ai_client = GroqClient()
         self.discovery = DiscoveryCrawler(
             timeout_ms=self.timeout * 1000,

@@ -201,6 +201,7 @@ class EntityExtractor:
             "company_name": clean_company_name(name),
             "business_name": clean_company_name(name),
             "listing_name": clean_company_name(name),
+            "container_path": self._container_path(block),
             "email": emails[0] if emails else None,
             "emails": emails,
             "phone": phones[0] if phones else None,
